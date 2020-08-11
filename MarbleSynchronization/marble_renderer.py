@@ -1,46 +1,34 @@
-import pygame, threading
+import pygame, csv
+from threading import Thread
 from pygame.locals import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
-from obj_loader import *
-import shader_loader as ShaderLoader
 
-#class MarbleRenderer(object):
-vertices= (
-    (1, -1, -1),
-    (1, 1, -1),
-    (-1, 1, -1),
-    (-1, -1, -1),
-    (1, -1, 1),
-    (1, 1, 1),
-    (-1, -1, 1),
-    (-1, 1, 1)
-    )
+def draw_sphere():
+    glColor3f(1.0, 1.0, 0.0)
+    sphere = gluNewQuadric()
+    gluQuadricNormals(sphere, GLU_SMOOTH)
+    gluQuadricTexture(sphere, GL_TRUE)
+    gluSphere(sphere, 1.0, 32, 16)
 
-edges = (
-    (0,1),
-    (0,3),
-    (0,4),
-    (2,1),
-    (2,3),
-    (2,7),
-    (6,3),
-    (6,4),
-    (6,7),
-    (5,1),
-    (5,4),
-    (5,7)
-    )
+def draw_cylinder():
+    #glRotatef(1, 1, 1.25, 12.5)
+    glColor3f(1.0, 0.0, 0.0)
+    cylinder = gluNewQuadric()
+    gluQuadricNormals(cylinder, GLU_SMOOTH)
+    gluQuadricTexture(cylinder, GL_TRUE)
+    gluCylinder(cylinder, 0.15, 0.15, 2.5, 32, 32)
 
-def Cube():
-    glBegin(GL_LINES)
-    for edge in edges:
-        for vertext in edge:
-            glVertex3fv(verticies[vertex])
-    glEnd()
+def renderer_main():
+    data = []
+    with open('outputs/rotations (1).csv', newline='') as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter=',', quotechar='|')
+        for row in csv_reader:
+            if 'timestamp' not in row:
+                #print([float(x) for x in row])
+                data.append([float(x) for x in row])
 
 
-def main(self):
     pygame.init()
     display = (800, 600)
     pygame.display.set_mode(display, DOUBLEBUF | OPENGL)
@@ -49,7 +37,6 @@ def main(self):
     glLightfv(GL_LIGHT0, GL_POSITION,  (-40, 200, 100, 0.0))
     glLightfv(GL_LIGHT0, GL_AMBIENT, (0.2, 0.2, 0.2, 1.0))
     glLightfv(GL_LIGHT0, GL_DIFFUSE, (0.5, 0.5, 0.5, 1.0))
-    #glLightfv(GL_LIGHT0, GL_DIFFUSE, (-40, 200, , 1.0))
     glEnable(GL_LIGHT0)
     glEnable(GL_LIGHTING)
     glEnable(GL_COLOR_MATERIAL)
@@ -57,64 +44,44 @@ def main(self):
     glShadeModel(GL_SMOOTH)
     
     gluPerspective(45, (display[0]/display[1]), 0.1, 50.0)
-    glTranslatef(0.0, 0.0, -40)
+    glTranslatef(0.0, 0.0, -20)
     glRotatef(0, 0, 0, 0)
 
-    #obj = OBJ('MarbleHeadset.obj')
-
-    clock = pygame.time.Clock()
-
-    glMatrixMode(GL_PROJECTION)
-    glLoadIdentity()
-    width, height = viewport
-    gluPerspective(90.0, width/float(height), 1, 100.0)
-    glEnable(GL_DEPTH_TEST)
-    glMatrixMode(GL_MODELVIEW)
-
-    rx, ry = (0,0)
-    tx, ty = (0,0)
-    zpos = 5
-    rotate = move = False
-    #obj = ObjLoader()
-    #obj.load_model("MarbleHeadset.obj")
-
-    #texture_offset = len(obj.vertex_index)*12
-
-
-    #shader = ShaderLoader.compile_shader("assets/video_17_vert.vs", "assets/video_17_frag.fs")
-
-    #VBO = glGenBuffers(1)
-    #glBindBuffer(GL_ARRAY_BUFFER, VBO)
-    #glBufferData(GL_ARRAY_BUFFER, obj.model.itemsize * len(obj.model), obj.model, GL_STATIC_DRAW)
-
-    ##position
-    #glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, obj.model.itemsize * 3, ctypes.c_void_p(0))
-    #glEnableVertexAttribArray(0)
-    ##texture
-    #glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, obj.model.itemsize * 2, ctypes.c_void_p(texture_offset))
-    #glEnableVertexAttribArray(1)
-
-    #glUseProgram(shader)
-
-
+    time = 0;
+    prev, curr = data[0], data[1]
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 quit()
+
+        #data = [[timestamp, rotx, roty], ...]
+        if not len(data) < 2 and time > data[1][0]:
+            
+            d_x = curr[1] - prev[1]
+            glRotatef(d_x, 1, 0, 0)       # Rotates everything
+            d_y = curr[2] - prev[2]
+            glRotatef(d_y, 0, 1, 0)       # Rotates everything
+
+            if abs(d_x) > 3.5 or abs(d_y) > 3.5:
+                print('{0}:\nd_x = {1}\nd_y = {2}'.format(data[1][0], d_x, d_y))       # prints the timestamp, which at index 0
+
+            data.pop(0)
+            if len(data) < 2:
+                break
+            prev, curr = data[0], data[1]
+        
+
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-        Cube()
-
-        glLoadIdentity()
-
-        # RENDER OBJECT
-        glTranslate(tx/20., ty/20., - zpos)
-        glRotate(ry, 1, 0, 0)
-        glRotate(rx, 0, 1, 0)
-        glCallList(obj.gl_list)
-        #transformLoc = glGetUniformLocation(shader, "transform")
-        #glUniformMatrix4fv(transformLoc, 1, GL_FALSE, rot_x * rot_y)
-
-        #glDrawArrays(GL_TRIANGLES, 0, len(obj.vertex_index))
+        #Cube()
+        draw_sphere()
+        draw_cylinder()
 
         pygame.display.flip()
+        pygame.time.wait(10)
+        time += 10
+
+
+t = Thread(renderer_main())
+t.start()
+t.join
