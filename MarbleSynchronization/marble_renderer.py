@@ -21,7 +21,7 @@ def draw_cylinder():
 
 def renderer_main():
     data = []
-    with open('outputs/rotations (1).csv', newline='') as csv_file:
+    with open('outputs/rotations (28).csv', newline='') as csv_file:
         csv_reader = csv.reader(csv_file, delimiter=',', quotechar='|')
         for row in csv_reader:
             if 'timestamp' not in row:
