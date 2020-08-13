@@ -22,6 +22,7 @@ VIDEO_RESCALE = 50
 LOW_PASS = 20
 
 K_SPEECH = 1.0
+K_EYEBROW = 1.0
 
 tilt_weight = {'speech_exaggeration_multiplier': 1.0,
             'resting_lip_spacing': 20
@@ -153,7 +154,7 @@ def main():
                     if img_points.size != 0:
                         rotation, translation = pe.estimate_pose(img_points)
                     
-                        print(type(img_points))
+                        print(img_points)
                         #if len(rotation) != 0:
                         moving_average.append(rotation)
                         if len(moving_average) > n:
@@ -163,7 +164,8 @@ def main():
                         if landmarks.size != 0:
                             rotation[0] += -K_SPEECH * (landmarks[51][1] - landmarks[57][1] + 20)        # Nodding
                             # rotati
-                        print(landmarks[51][1] - landmarks[57][1])
+                        #print(landmarks[51][1] - landmarks[57][1])
+                        #print(landmarks[24][1] - landmarks[44][1])
 
                         #converted_rotation = tuple(jbr(rot) for rot in rotation)
                         converted_rotation = rotation
@@ -177,7 +179,7 @@ def main():
                                 #rot_frame[1] = rot_frame[0]
                                 
 
-                        print('timestamp:{3}\npitch:{0}\nyaw:{1}\nroll{2}\n'.format(*converted_rotation, cap.get(cv2.CAP_PROP_POS_MSEC)))
+                        #print('timestamp:{3}\npitch:{0}\nyaw:{1}\nroll{2}\n'.format(*converted_rotation, cap.get(cv2.CAP_PROP_POS_MSEC)))
                         file.write('{0},{1},{2}\n'.format(int(cap.get(cv2.CAP_PROP_POS_MSEC)), converted_rotation[0][0], converted_rotation[1][0]))
 
                         glPushMatrix()
@@ -250,15 +252,6 @@ def detect(frame, mark=False):
         
         # Calculating landmarks
         p = predictor(gray, face)
-        #for i in range(68):       # range(68)   [33, 8, 45, 36, 54, 48]
-        #    x = p.part(i).x
-        #    y = p.part(i).y
-        #    landmarks = np.append(landmarks, np.array([[x, y]]), axis=0)
-        #    if int(i) in [17, 21, 22, 26, 36, 39, 42, 45, 31, 35, 48, 54, 57, 8]:
-        #        print(i)
-        #        img_points = np.append(img_points, np.array([[x, y]]), axis=0)
-        #    if mark:
-        #        cv2.circle(frame, (x, y), 3, (255, 0, 0), -1)
         for i in [17, 21, 22, 26, 36, 39, 42, 45, 31, 35, 48, 54, 57, 8]:       # range(68)   [33, 8, 45, 36, 54, 48]
             x = p.part(i).x
             y = p.part(i).y
@@ -269,7 +262,7 @@ def detect(frame, mark=False):
             x = p.part(i).x
             y = p.part(i).y
             landmarks = np.append(landmarks, np.array([[x, y]]), axis=0)
-            if i in [62, 66]:
+            if i in range(17, 22) or i in range(22, 27):
                 cv2.circle(frame, (x, y), 3, (0, 255, 0), -1)
 
     return frame, landmarks, img_points
