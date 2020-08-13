@@ -20,20 +20,44 @@ VIDEO_RESCALE = 50
 class Profile:
     def __init__(self, name):
         if name == "Jaiveer":
+            self.resting_tilt = 32
             self.resting_lip_distance = 0
-            self.resting_eyebrow_elevation = 10
+            self.resting_eyebrow_elevation = 43
             self.weights = {
                 "measured_tilt_degrees": 1,
-                "lip_spacing": 0,
-                "eyebrow_elevation": 0
+                "lip_spacing": 3,
+                "eyebrow_elevation": -5
             }
 
+
+def ewma(feature_data, exceptions):
+    def avg(data):
+        alpha = 2 / (len(data) + 1)
+        if len(data) == 1:
+            return data[-1]
+        else:
+            curr = data[-1]
+            prev = avg(data[:-1])
+            return {key: (alpha * curr[key] + (1-alpha) * prev[key] if key not in exceptions else curr[key]) for key in curr.keys()}
+    return avg(feature_data)
+
+
+sliding_window = []
+WINDOW_LENGTH = 3
 def get_tilt_features(profile, head_rotation, head_translation, landmarks):
-    return {
-        "measured_tilt_degrees": head_rotation[0],
-        "lip_spacing": landmarks[51][1] - landmarks[57][1] + profile.resting_lip_distance,
-        "eyebrow_elevation": (landmarks[19][1] + landmarks[24][1]) / 2 - landmarks[27][1] + profile.resting_eyebrow_elevation
+    features = {
+        "measured_tilt_degrees": float(head_rotation[0] - profile.resting_tilt),
+        "lip_spacing": float(landmarks[66][1] - landmarks[62][1] - profile.resting_lip_distance),
+        "eyebrow_elevation": float(landmarks[27][1] - (landmarks[19][1] + landmarks[24][1]) / 2 - profile.resting_eyebrow_elevation)
     }
+
+    sliding_window.append(features)
+    if len(sliding_window) > WINDOW_LENGTH:
+        sliding_window.pop(0)
+    filtered_features = ewma(sliding_window, set("eyebrow_elevation"))
+    return filtered_features
+
+
 
 def get_tilt_weights(profile):
     return profile.weights
@@ -45,8 +69,8 @@ def log_features_weights(features, weights):
     description = ""
     for feature_label, feature_val in features.items():
       description += f"{feature_label}: {feature_val:.3f} * {weights[feature_label]} = {feature_val * weights[feature_label]:.3f} | "
-    descriptionString = f"Final Angle: {dot_product(features, weights):.3f}\n" + descriptionString
-    print(descriptionString)
+    description = f"Final Angle: {dot_product(features, weights):.3f}\n" + description
+    print(description)
 
 
 #############################
@@ -159,8 +183,6 @@ def main():
             cv2.imshow(WINDOW_TITLE, frame)     # Shows the image in a new window
             cv2.waitKey(0)
         else:
-            sliding_window = []
-            WINDOW_LENGTH = 6
 
             profile = Profile("Jaiveer")
 
@@ -179,15 +201,11 @@ def main():
                 if img_points.size != 0:
                     rotation, translation = pe.estimate_pose(img_points)
                 
-                    sliding_window.append(rotation)
-                    if len(sliding_window) > WINDOW_LENGTH:
-                        sliding_window.pop(0)
-                    filtered_rotation = [ewma([rot[i] for rot in sliding_window]) for i in range(3)]
-
-
-                    tilt_features = get_tilt_features(profile, filtered_rotation, translation, landmarks)
+                   
                     tilt_weights = get_tilt_weights(profile)
 
+                    tilt_features = get_tilt_features(profile, rotation, translation, landmarks)
+                    
                     log_features_weights(tilt_features, tilt_weights)
 
                     tilt = dot_product(tilt_features, tilt_weights)
@@ -220,19 +238,6 @@ def create_file(file_name, file_type, n=0):
         return open(destination, 'w+')
     else:
         return create_file(file_name, file_type, n+1)
-
-def ewma(data):
-    data.reverse()
-    def avg(data):
-        alpha = 2 / (len(data) + 1)
-        if len(data) == 1:
-            return data[0]
-        else:
-            curr = data[0]
-            print(curr)
-            data.pop(0)
-            return alpha * curr + (1 - alpha) * avg(data)
-    return avg(data)
 
 def rect_to_coor(rect):
     x1 = rect.left()        # These assignments grab the coordinates of the top left and bottom right points of the rectangle[] object
