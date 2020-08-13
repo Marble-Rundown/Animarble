@@ -1,4 +1,3 @@
-
 import dlib, pygame
 import cv2
 import argparse
@@ -6,7 +5,6 @@ import numpy as np
 import os
 from pose_estimator import PoseEstimator
 #import marble_renderer
-from threading import Thread
 from pygame.locals import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -19,17 +17,29 @@ WINDOW_TITLE = 'Facial Landmark Detector'
 IMAGE_RESCALE = 75
 VIDEO_RESCALE = 50
 
-LOW_PASS = 20
+class Profile:
+    def __init__(self, name):
+        if name == "Jaiveer":
+            self.resting_lip_distance = 0
+            self.resting_eyebrow_elevation = 10
+            self.weights = {
+                "measured_tilt_degrees": 1,
+                "lip_spacing": 0,
+                "eyebrow_elevation": 0
+            }
 
-K_SPEECH = 1.0
-K_EYEBROW = 1.0
-
-tilt_weight = {'speech_exaggeration_multiplier': 1.0,
-            'resting_lip_spacing': 20
+def get_tilt_features(profile, head_rotation, head_translation, landmarks):
+    return {
+        "measured_tilt_degrees": head_rotation[0],
+        "lip_spacing": landmarks[51][1] - landmarks[57][1] + profile.resting_lip_distance,
+        "eyebrow_elevation": (landmarks[19][1] + landmarks[24][1]) / 2 - landmarks[27][1] + profile.resting_eyebrow_elevation
     }
-#tilt
 
-#pan_template
+def get_tilt_weights(profile):
+    return profile.weights
+
+def dot_product(features, weights):
+    return sum([feature_val * weights[feature_label] for feature_label, feature_val in features.items()])
 
 
 #############################
@@ -81,8 +91,6 @@ pe = PoseEstimator(dimensions)
 
 
 # Pygame and OpenGL Initialization
-d_x = 0
-d_y = 0
 
 def draw_sphere():
     glColor3f(1.0, 1.0, 0.0)
@@ -92,7 +100,6 @@ def draw_sphere():
     gluSphere(sphere, 1.0, 32, 16)
 
 def draw_cylinder():
-    #glRotatef(1, 1, 1.25, 12.5)
     glColor3f(1.0, 0.0, 0.0)
     cylinder = gluNewQuadric()
     gluQuadricNormals(cylinder, GLU_SMOOTH)
@@ -117,12 +124,20 @@ gluPerspective(45, (display[0]/display[1]), 0.1, 50.0)
 glTranslatef(0.0, 0.0, -20)
 glRotatef(0, 0, 0, 0)
 
+def render_marble(pan, tilt):
+    glPushMatrix()
+    glRotatef(tilt, 1, 0, 0)
+    glRotatef(pan, 0, -1, 0)
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+    draw_sphere()
+    draw_cylinder()
+    glPopMatrix()
+
 
 #############################
 #           Main            #
 #############################
 def main():
-    rotation, translation = (), ()
 
     with create_file('rotations', 'csv') as file:
         file.write('timestamp,pitch,yaw\n')
@@ -137,9 +152,11 @@ def main():
             cv2.imshow(WINDOW_TITLE, frame)     # Shows the image in a new window
             cv2.waitKey(0)
         else:
-            moving_average = []
-            n = 6
-            rot_frame = []
+            sliding_window = []
+            WINDOW_LENGTH = 6
+
+            profile = Profile("Jaiveer")
+
             while cap.isOpened():           # Main while loop
                 for event in pygame.event.get():        # Pygame
                     if event.type == pygame.QUIT:
@@ -147,59 +164,33 @@ def main():
                         quit()
                 
                 s, frame = cap.read()
-                if s:
-                    frame, landmarks, img_points = detect(frame, mark=True)
-                    frame = rescale_frame(frame, percent=rescale)
+                assert s, "Failed to read from webcam"
 
-                    if img_points.size != 0:
-                        rotation, translation = pe.estimate_pose(img_points)
-                    
-                        print(img_points)
-                        #if len(rotation) != 0:
-                        moving_average.append(rotation)
-                        if len(moving_average) > n:
-                            moving_average.pop(0)
-                        #rotation = [sum([rot[i] for rot in moving_average]) / n for i in range(3)] 
-                        rotation = [ewma([rot[i] for rot in moving_average]) for i in range(3)]
-                        if landmarks.size != 0:
-                            rotation[0] += -K_SPEECH * (landmarks[51][1] - landmarks[57][1] + 20)        # Nodding
-                            # rotati
-                        #print(landmarks[51][1] - landmarks[57][1])
-                        #print(landmarks[24][1] - landmarks[44][1])
+                frame, landmarks, img_points = detect(frame, mark=True)
+                frame = rescale_frame(frame, percent=rescale)
 
-                        #converted_rotation = tuple(jbr(rot) for rot in rotation)
-                        converted_rotation = rotation
+                if img_points.size != 0:
+                    rotation, translation = pe.estimate_pose(img_points)
+                
+                    sliding_window.append(rotation)
+                    if len(sliding_window) > WINDOW_LENGTH:
+                        sliding_window.pop(0)
+                    filtered_rotation = [ewma([rot[i] for rot in sliding_window]) for i in range(3)]
 
-                        rot_frame.append((converted_rotation[0], converted_rotation[1]))
-                        if len(rot_frame) > 2:
-                            rot_frame.pop(0)
-                            d_x, d_y = rot_frame[0][0] - rot_frame[1][0], rot_frame[1][1] - rot_frame[0][1]
-                            if abs(d_x) > LOW_PASS or abs(d_y) > LOW_PASS:
-                                converted_rotation = rot_frame[0]
-                                #rot_frame[1] = rot_frame[0]
-                                
+                    tilt = dot_product(
+                        get_tilt_features(profile, filtered_rotation, translation, landmarks), 
+                        get_tilt_weights(profile))
+                    pan = 0
 
-                        #print('timestamp:{3}\npitch:{0}\nyaw:{1}\nroll{2}\n'.format(*converted_rotation, cap.get(cv2.CAP_PROP_POS_MSEC)))
-                        file.write('{0},{1},{2}\n'.format(int(cap.get(cv2.CAP_PROP_POS_MSEC)), converted_rotation[0][0], converted_rotation[1][0]))
+                    # file.write('{0},{1},{2}\n'.format(int(cap.get(cv2.CAP_PROP_POS_MSEC)), converted_rotation[0][0], converted_rotation[1][0]))
 
-                        glPushMatrix()
-                        glRotatef(rotation[0], 1, 0, 0)
-                        glRotatef(rotation[1], 0, -1, 0)
-                        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-                        draw_sphere()
-                        draw_cylinder()
-                        glPopMatrix()
-                        #print('({0}, {1})'.format(marble_renderer.rotate_x, marble_renderer.rotate_y))
-
-                    cv2.imshow(WINDOW_TITLE, frame)
-                    if cv2.waitKey(1) & 0xFF == 27:     # 27 is ASCII for the Esc key on a keyboard
-                        break
+                    render_marble(pan, tilt)
                 else:
-                    break
+                    print("Failed to find image points")
 
-                #Cube()
-                #draw_sphere()
-                #draw_cylinder()
+                cv2.imshow(WINDOW_TITLE, frame)
+                if cv2.waitKey(1) & 0xFF == 27:     # 27 is ASCII for the Esc key on a keyboard
+                    break     
 
                 pygame.display.flip()
                 pygame.time.wait(10)
@@ -274,19 +265,7 @@ def rescale_frame(frame, percent=100):
 
 
 #############################
-#          Special          #
+#          MAIN          #
 #############################
-#__name__ is a special Python variable
-#1. If you run THIS script using Gitbash: the __name__ variable within this script equals '__main__'
-#2. If you create another script import_script.py that IMPORTS THIS SCRIPT using 'import msync':the __name__ variable within import_script.py equals 'msync'
 if __name__ == '__main__':
     main()
-    #m = Thread(main())
-    #m.start()
-    #m.join()
-
-    #t = Thread(marble_renderer.renderer_main())
-    #t.start()
-    #t.join()
-    #marble_renderer.rotate_x = 123
-    #print(marble_renderer.test())
