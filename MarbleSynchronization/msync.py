@@ -41,6 +41,13 @@ def get_tilt_weights(profile):
 def dot_product(features, weights):
     return sum([feature_val * weights[feature_label] for feature_label, feature_val in features.items()])
 
+def log_features_weights(features, weights):
+    description = ""
+    for feature_label, feature_val in features.items():
+      description += f"{feature_label}: {feature_val:.3f} * {weights[feature_label]} = {feature_val * weights[feature_label]:.3f} | "
+    descriptionString = f"Final Angle: {dot_product(features, weights):.3f}\n" + descriptionString
+    print(descriptionString)
+
 
 #############################
 #       Initialization      #
@@ -177,9 +184,13 @@ def main():
                         sliding_window.pop(0)
                     filtered_rotation = [ewma([rot[i] for rot in sliding_window]) for i in range(3)]
 
-                    tilt = dot_product(
-                        get_tilt_features(profile, filtered_rotation, translation, landmarks), 
-                        get_tilt_weights(profile))
+
+                    tilt_features = get_tilt_features(profile, filtered_rotation, translation, landmarks)
+                    tilt_weights = get_tilt_weights(profile)
+
+                    log_features_weights(tilt_features, tilt_weights)
+
+                    tilt = dot_product(tilt_features, tilt_weights)
                     pan = 0
 
                     # file.write('{0},{1},{2}\n'.format(int(cap.get(cv2.CAP_PROP_POS_MSEC)), converted_rotation[0][0], converted_rotation[1][0]))
