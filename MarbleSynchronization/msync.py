@@ -19,7 +19,16 @@ WINDOW_TITLE = 'Facial Landmark Detector'
 IMAGE_RESCALE = 75
 VIDEO_RESCALE = 50
 
-K_NOD = 0.333
+LOW_PASS = 20
+
+K_SPEECH = 1.0
+
+tilt_weight = {'speech_exaggeration_multiplier': 1.0,
+            'resting_lip_spacing': 20
+    }
+#tilt
+
+#pan_template
 
 
 #############################
@@ -128,7 +137,7 @@ def main():
             cv2.waitKey(0)
         else:
             moving_average = []
-            n = 10
+            n = 6
             rot_frame = []
             while cap.isOpened():           # Main while loop
                 for event in pygame.event.get():        # Pygame
@@ -144,25 +153,40 @@ def main():
                     if img_points.size != 0:
                         rotation, translation = pe.estimate_pose(img_points)
                     
-                    if len(rotation) != 0:
+                        print(type(img_points))
+                        #if len(rotation) != 0:
                         moving_average.append(rotation)
                         if len(moving_average) > n:
                             moving_average.pop(0)
-                        rotation = [sum([rot[i] for rot in moving_average]) / n for i in range(3)] 
+                        #rotation = [sum([rot[i] for rot in moving_average]) / n for i in range(3)] 
+                        rotation = [ewma([rot[i] for rot in moving_average]) for i in range(3)]
                         if landmarks.size != 0:
-                            rotation[0] += K_NOD * (landmarks[51][1] - landmarks[57][1])        # Nodding
+                            rotation[0] += -K_SPEECH * (landmarks[51][1] - landmarks[57][1] + 20)        # Nodding
+                            # rotati
+                        print(landmarks[51][1] - landmarks[57][1])
 
-                        rotation = tuple(jbr(rot) for rot in rotation)
+                        #converted_rotation = tuple(jbr(rot) for rot in rotation)
+                        converted_rotation = rotation
 
-                        print('timestamp:{3}\npitch:{0}\nyaw:{1}\nroll{2}\n'.format(*rotation, cap.get(cv2.CAP_PROP_POS_MSEC)))
-                        file.write('{0},{1},{2}\n'.format(int(cap.get(cv2.CAP_PROP_POS_MSEC)), rotation[0][0], rotation[1][0]))
-
-                        rot_frame.append((rotation[0], rotation[1]))
+                        rot_frame.append((converted_rotation[0], converted_rotation[1]))
                         if len(rot_frame) > 2:
                             rot_frame.pop(0)
                             d_x, d_y = rot_frame[0][0] - rot_frame[1][0], rot_frame[1][1] - rot_frame[0][1]
-                            glRotatef(d_x, 1, 0, 0)
-                            glRotatef(d_y, 0, 1, 0)
+                            if abs(d_x) > LOW_PASS or abs(d_y) > LOW_PASS:
+                                converted_rotation = rot_frame[0]
+                                #rot_frame[1] = rot_frame[0]
+                                
+
+                        print('timestamp:{3}\npitch:{0}\nyaw:{1}\nroll{2}\n'.format(*converted_rotation, cap.get(cv2.CAP_PROP_POS_MSEC)))
+                        file.write('{0},{1},{2}\n'.format(int(cap.get(cv2.CAP_PROP_POS_MSEC)), converted_rotation[0][0], converted_rotation[1][0]))
+
+                        glPushMatrix()
+                        glRotatef(rotation[0], 1, 0, 0)
+                        glRotatef(rotation[1], 0, -1, 0)
+                        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+                        draw_sphere()
+                        draw_cylinder()
+                        glPopMatrix()
                         #print('({0}, {1})'.format(marble_renderer.rotate_x, marble_renderer.rotate_y))
 
                     cv2.imshow(WINDOW_TITLE, frame)
@@ -171,10 +195,9 @@ def main():
                 else:
                     break
 
-                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
                 #Cube()
-                draw_sphere()
-                draw_cylinder()
+                #draw_sphere()
+                #draw_cylinder()
 
                 pygame.display.flip()
                 pygame.time.wait(10)
@@ -193,6 +216,19 @@ def create_file(file_name, file_type, n=0):
         return open(destination, 'w+')
     else:
         return create_file(file_name, file_type, n+1)
+
+def ewma(data):
+    data.reverse()
+    def avg(data):
+        alpha = 2 / (len(data) + 1)
+        if len(data) == 1:
+            return data[0]
+        else:
+            curr = data[0]
+            print(curr)
+            data.pop(0)
+            return alpha * curr + (1 - alpha) * avg(data)
+    return avg(data)
 
 def rect_to_coor(rect):
     x1 = rect.left()        # These assignments grab the coordinates of the top left and bottom right points of the rectangle[] object
@@ -233,6 +269,8 @@ def detect(frame, mark=False):
             x = p.part(i).x
             y = p.part(i).y
             landmarks = np.append(landmarks, np.array([[x, y]]), axis=0)
+            if i in [62, 66]:
+                cv2.circle(frame, (x, y), 3, (0, 255, 0), -1)
 
     return frame, landmarks, img_points
 
