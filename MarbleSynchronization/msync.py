@@ -1,5 +1,5 @@
 
-import dlib, pygame
+import dlib, pygame, math
 import cv2
 import argparse
 import numpy as np
@@ -150,7 +150,7 @@ def main():
             calibration = []
             calibrated = False
             c_n = 30
-            rotation_offsets = (0, 0, 0)
+            rotation_offset = (0, 0, 0)
 
             profile = Profile("Jeffrey")
 
@@ -175,7 +175,7 @@ def main():
                         #print(calibration)
                         if len(calibration) > c_n:
                             averages = [sum([rot[i] for rot in calibration]) / c_n for i in range(3)]
-                            rotation_offsets = tuple(-avg for avg in averages)
+                            rotation_offset = tuple(-avg for avg in averages)
                             calibrated = True
                     
                     #print(img_points)
@@ -193,7 +193,7 @@ def main():
                     #g_noise = tuple(numpy.random.normal(scale=3.0) for _ in range(3)) if abs(landmarks[51][1] - landmarks[57][1] + 20) > 5 else (0, 0, 0)
 
                     #converted_rotation = tuple(jbr(rot) for rot in rotation)
-                    converted_rotation = tuple(rotation[i] + rotation_offsets[i] for i in range(3)) 
+                    converted_rotation = tuple(rotation[i] + rotation_offset[i] for i in range(3)) 
 
                     tilt_weights = get_tilt_weights(profile)
 
@@ -214,11 +214,11 @@ def main():
                                 
 
                     #print('timestamp:{3}\npitch:{0}\nyaw:{1}\nroll{2}\n'.format(*converted_rotation, cap.get(cv2.CAP_PROP_POS_MSEC)))
-                    #print(rotation_offsets)
+                    #print(rotation_offset)
                     #file.write('{0},{1},{2}\n'.format(int(cap.get(cv2.CAP_PROP_POS_MSEC)), converted_rotation[0][0], converted_rotation[1][0]))
                     file.write('{0},{1},{2}\n'.format(int(cap.get(cv2.CAP_PROP_POS_MSEC)), tilt, pan))
                     #rotate_marble(pan, tilt)
-                    rotate_marble(tilt, pan)
+                    rotate_marble(tilt + rotation_offset[0], pan + rotation_offset[1])
                 else:
                     print('Failed to find image points')
 
@@ -250,14 +250,14 @@ class Profile:
             }
         elif name == 'Jeffrey':
             self.resting_tilt = 20
-            self.resting_lip_distance = 2
+            self.resting_lip_distance = 20
             self.chatter_lip_distance = 5
             self.resting_eyebrow_elevation = 32
             self.weights = {
-                'measured_tilt_degrees': 0,
+                'measured_tilt_degrees': 1,
                 'lip_spacing': 0,
                 'eyebrow_elevation': 0,
-                'chatter': 3
+                'chatter': 0
             }
 
 
@@ -285,9 +285,10 @@ def ewma(feature_data, exceptions):
     return avg(feature_data)
 
 def get_tilt_features(profile, head_rotation, head_translation, landmarks):
+    #NOSE_LENGTH = distance(landmarks[])
     features = {
         "measured_tilt_degrees": float(head_rotation[0]),
-        "lip_spacing": float(landmarks[66][1] - landmarks[62][1] - profile.resting_lip_distance),
+        "lip_spacing": float(landmarks[51][1] - landmarks[57][1] - profile.resting_lip_distance),
         "eyebrow_elevation": float(landmarks[27][1] - (landmarks[19][1] + landmarks[24][1]) / 2 - profile.resting_eyebrow_elevation)
     }
 
@@ -332,6 +333,9 @@ def rect_to_coor(rect):
     y2 = rect.bottom()
     return (x1, y1), (x2, y2)
 
+def distance(a, b):
+    return math.sqrt((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2)
+
 def detect(frame, mark=False):
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     faces = detector(gray)
@@ -345,7 +349,7 @@ def detect(frame, mark=False):
         # Boxing out the faces
         if mark:
             TL, BR = rect_to_coor(face)
-            cv2.rectangle(frame, TL, BR, (0, 255, 0), 3)        # From these two points, we can draw a 
+            cv2.rectangle(frame, TL, BR, (0, 255, 0), 3)        # From these two points, we can draw a rectanngle
 
         # Calculating landmarks
         p = predictor(gray, face)
