@@ -22,13 +22,14 @@ class Profile:
         if name == "Jaiveer":
             self.resting_tilt = 32
             self.resting_lip_distance = 0
+            self.chatter_lip_distance = 10
             self.resting_eyebrow_elevation = 43
-            self.weights = {
+            self.tilt_weights = {
                 "measured_tilt_degrees": 1,
                 "lip_spacing": 3,
-                "eyebrow_elevation": -5
+                "eyebrow_elevation": -5,
+                "chatter": 0
             }
-
 
 def ewma(feature_data, exceptions):
     def avg(data):
@@ -45,11 +46,11 @@ def ewma(feature_data, exceptions):
 sliding_window = []
 WINDOW_LENGTH = 6
 def get_tilt_features(profile, head_rotation, head_translation, landmarks):
-    features = {
-        "measured_tilt_degrees": float(head_rotation[0] - profile.resting_tilt),
-        "lip_spacing": float(landmarks[66][1] - landmarks[62][1] - profile.resting_lip_distance),
-        "eyebrow_elevation": float(landmarks[27][1] - (landmarks[19][1] + landmarks[24][1]) / 2 - profile.resting_eyebrow_elevation)
-    }
+    features = {}
+    features["measured_tilt_degrees"] = float(head_rotation[0] - profile.resting_tilt)
+    features["lip_spacing"] = float(landmarks[66][1] - landmarks[62][1] - profile.resting_lip_distance)
+    features["eyebrow_elevation"] = float(landmarks[27][1] - (landmarks[19][1] + landmarks[24][1]) / 2 - profile.resting_eyebrow_elevation)
+    features["chatter"] = np.random.normal() if features["lip_spacing"] > profile.chatter_lip_distance else 0
 
     sliding_window.append(features)
     if len(sliding_window) > WINDOW_LENGTH:
@@ -57,10 +58,8 @@ def get_tilt_features(profile, head_rotation, head_translation, landmarks):
     filtered_features = ewma(sliding_window, set("eyebrow_elevation"))
     return filtered_features
 
-
-
 def get_tilt_weights(profile):
-    return profile.weights
+    return profile.tilt_weights
 
 def dot_product(features, weights):
     return sum([feature_val * weights[feature_label] for feature_label, feature_val in features.items()])
@@ -76,6 +75,10 @@ def log_features_weights(features, weights):
 #############################
 #       Initialization      #
 #############################
+
+# Numpy random seeding
+np.random.seed(5327)
+
 # Computer Vision Initialization
 detector = dlib.get_frontal_face_detector()     # Get a face detector from the dlib library
 predictor = dlib.shape_predictor('assets/shape_predictor_68_face_landmarks.dat')      # Get a shape predictor based on a trained model from the dlib library
@@ -83,7 +86,7 @@ predictor = dlib.shape_predictor('assets/shape_predictor_68_face_landmarks.dat')
 def check_str(value):
     if type(value) != str:
         raise argparse.ArgumentTypeError(f"'{value}' is not a string")
-    return value;
+    return value
 ap = argparse.ArgumentParser()      # Create an instance of an ArgumentParser object
 ap.add_argument('-i', '--image', type=check_str, help='The path to the image')      # Adds an argument '--image' that describes the image file path
 ap.add_argument('-v', '--video', type=check_str, help='The path to the video')      # Adds an argument '--video' that describes the video file path
@@ -211,7 +214,7 @@ def main():
                     tilt = dot_product(tilt_features, tilt_weights)
                     pan = 0
 
-                    # file.write('{0},{1},{2}\n'.format(int(cap.get(cv2.CAP_PROP_POS_MSEC)), converted_rotation[0][0], converted_rotation[1][0]))
+                    file.write('{0},{1},{2}\n'.format(int(cap.get(cv2.CAP_PROP_POS_MSEC)), tilt, pan))
 
                     render_marble(pan, tilt)
                 else:
@@ -230,7 +233,6 @@ def main():
 #############################
 #         Functions         #
 #############################
-jbr = lambda angle: -angle + 90
 
 def create_file(file_name, file_type, n=0):
     destination = './outputs/{0}{1}.{2}'.format(file_name, f' ({n})' if n != 0 else '', file_type)
@@ -259,13 +261,13 @@ def detect(frame, mark=False):
         
         # Calculating landmarks
         p = predictor(gray, face)
-        for i in [17, 21, 22, 26, 36, 39, 42, 45, 31, 35, 48, 54, 57, 8]:       # range(68)   [33, 8, 45, 36, 54, 48]
+        for i in [17, 21, 22, 26, 36, 39, 42, 45, 31, 35, 48, 54, 57, 8]: 
             x = p.part(i).x
             y = p.part(i).y
             img_points = np.append(img_points, np.array([[x, y]]), axis=0)
             if mark:
                 cv2.circle(frame, (x, y), 3, (255, 0, 0), -1)
-        for i in range(68):       # range(68)   [33, 8, 45, 36, 54, 48]
+        for i in range(68):
             x = p.part(i).x
             y = p.part(i).y
             landmarks = np.append(landmarks, np.array([[x, y]]), axis=0)
