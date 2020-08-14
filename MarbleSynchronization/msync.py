@@ -43,7 +43,7 @@ def ewma(feature_data, exceptions):
 
 
 sliding_window = []
-WINDOW_LENGTH = 3
+WINDOW_LENGTH = 6
 def get_tilt_features(profile, head_rotation, head_translation, landmarks):
     features = {
         "measured_tilt_degrees": float(head_rotation[0] - profile.resting_tilt),
