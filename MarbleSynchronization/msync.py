@@ -1,12 +1,7 @@
 
-import dlib, pygame, math
-import cv2
-import argparse
+import os, argparse, dlib, cv2, pygame, math
 import numpy as np
-import os
 from pose_estimator import PoseEstimator
-#import marble_renderer
-from threading import Thread
 from pygame.locals import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -19,11 +14,12 @@ WINDOW_TITLE = 'Facial Landmark Detector'
 IMAGE_RESCALE = 75
 VIDEO_RESCALE = 50
 
-# Lip Feature
+# Lip/Speech Feature
 K_SPEECH = 1.0
 SPEECH_OFFSET = 20
+SPEECH_THRESHOLD = 10
 
-# Gaussian Noise in pan and tilt
+# Gaussian Noise in pan and tilt while talking
 NOISE_PERIOD = 7
 NOISE_INTENSITY = 2.0
 
@@ -46,12 +42,14 @@ ap = argparse.ArgumentParser()      # Create an instance of an ArgumentParser ob
 ap.add_argument('-i', '--image', type=check_str, help='The path to the image')      # Adds an argument '--image' that describes the image file path
 ap.add_argument('-v', '--video', type=check_str, help='The path to the video')      # Adds an argument '--video' that describes the video file path
 ap.add_argument('-s', '--stream', help='Set this to True to start in livestream mode')      # Adds an argument '--stream' that determines whether to use the webcam
+ap.add_argument('-m', '--marble', required=True, help='The marble being recorded')
 args = vars(ap.parse_args())        # Vars() returns the __dict__ attribute of an object, so args is a dictionary of the command line parameters passed to this program
-if not any(args.values()):
-    raise TypeError('Expected 1 argument, but received 0 arguments')
 num_args = len([a for a in args.values() if a])
-if num_args > 1:
-    raise TypeError('Expected only 1 argument, but received {0} arguments'.format(num_args))
+if num_args != 2:
+    raise TypeError(f'Expected 2 arguments, but received {num_args} argument(s)')
+marble = args['marble'].lower()
+if marble not in ['left', 'right']:
+    raise TypeError(f"'{marble}' is not a valid marble")
 
 file_type = ''      # Initialize variables based on target type
 target = None
@@ -123,8 +121,8 @@ glRotatef(0, 0, 0, 0)
 def main():
     rotation, translation = (), ()
 
-    with create_file('rotations', 'csv') as file:
-        file.write('timestamp,pitch,yaw\n')
+    with create_file(marble, 'csv') as file:
+        file.write('timestamp,tilt,pan,pan_setpoint\n')
 
         if file_type == 'image':
             frame, landmarks, img_points = detect(image, mark=True)
@@ -144,7 +142,7 @@ def main():
             c_n = 30
             rotation_offset = (0, 0, 0)
 
-            g_noise = None
+            g_noise = (0, 0, 0)
             count = 0
 
             profile = Profile("Jeffrey")
@@ -173,51 +171,26 @@ def main():
                             rotation_offset = tuple(-avg for avg in averages)
                             calibrated = True
                     
-                    #print(img_points)
-                    #if len(rotation) != 0:
-
                     moving_average.append(rotation)
                     if len(moving_average) > n:
                         moving_average.pop(0)
-                    #rotation = [sum([rot[i] for rot in moving_average]) / n for i in range(3)] 
-                    rotation = [ewma([rot[i] for rot in moving_average]) for i in range(3)]
-                    if landmarks.size != 0:
-                        rotation[0] += -K_SPEECH * (landmarks[51][1] - landmarks[57][1] + SPEECH_OFFSET)        # nodding
 
-                    #print(landmarks[51][1] - landmarks[57][1])
-                    #print(landmarks[24][1] - landmarks[44][1])
+                    rotation = [ewma([rot[i] for rot in moving_average]) for i in range(3)]
+                    mouth_size = landmarks[51][1] - landmarks[57][1] + SPEECH_OFFSET
+                    if landmarks.size != 0:
+                        rotation[0] += -K_SPEECH * mouth_size        # nodding
 
                     if count % NOISE_PERIOD == 0:
-                        g_noise = tuple(np.random.normal(scale=NOISE_INTENSITY) for _ in range(3))            
+                        g_noise = tuple(np.random.normal(scale=NOISE_INTENSITY) for _ in range(3)) if mouth_size > SPEECH_THRESHOLD else (0, 0, 0)
                     count += 1
-                    #converted_rotation = tuple(jbr(rot) for rot in rotation)
+
                     converted_rotation = tuple(rotation[i] + rotation_offset[i] + g_noise[i] * ((count % NOISE_PERIOD) + 1) / NOISE_PERIOD for i in range(3))
                     tilt, pan = converted_rotation[0], converted_rotation[1]
 
-                    #tilt_weights = get_tilt_weights(profile)
-
-                    #tilt_features = get_tilt_features(profile, converted_rotation, translation, landmarks)
-                    
-                    #log_features_weights(tilt_features, tilt_weights)
-
-                    #tilt = dot_product(tilt_features, tilt_weights)
-                    #pan = 0
-
-                    #rot_frame.append((converted_rotation[0], converted_rotation[1]))
-                    #if len(rot_frame) > 2:
-                    #    rot_frame.pop(0)
-                    #    d_x, d_y = rot_frame[0][0] - rot_frame[1][0], rot_frame[1][1] - rot_frame[0][1]
-                    #    if abs(d_x) > LOW_PASS or abs(d_y) > LOW_PASS:
-                    #        converted_rotation = rot_frame[0]
-                            #rot_frame[1] = rot_frame[0]
-                                
-
                     print('timestamp:{3}\npitch:{0}\nyaw:{1}\nroll{2}\n'.format(*converted_rotation, cap.get(cv2.CAP_PROP_POS_MSEC)))
-                    #print(rotation_offset)
-                    #file.write('{0},{1},{2}\n'.format(int(cap.get(cv2.CAP_PROP_POS_MSEC)), converted_rotation[0][0], converted_rotation[1][0]))
-                    file.write('{0},{1},{2}\n'.format(int(cap.get(cv2.CAP_PROP_POS_MSEC)), tilt, pan))
+                    file.write('{0},{1},{2},0\n'.format(int(cap.get(cv2.CAP_PROP_POS_MSEC)), jbr(tilt)[0], jbr(pan)[0]))
+                    
                     rotate_marble(tilt, pan)
-                    #rotate_marble(tilt + rotation_offset[0], pan + rotation_offset[1])
                 else:
                     print('Failed to find image points')
 
@@ -266,51 +239,11 @@ class Profile:
 jbr = lambda angle: -angle + 90
 
 def create_file(file_name, file_type, n=0):
-    destination = './outputs/{0}{1}.{2}'.format(file_name, f' ({n})' if n != 0 else '', file_type)
+    destination = './outputs/{0}{1}.{2}'.format(file_name, f' ({n})', file_type)       # Add:    if n != 0 else ''    after f' ({n})' if you don't want the first file to have a number
     if not os.path.isfile(destination):
         return open(destination, 'w+')
     else:
         return create_file(file_name, file_type, n+1)
-
-#def ewma(feature_data, exceptions):
-#    def avg(data):
-#        alpha = 2 / (len(data) + 1)
-#        if len(data) == 1:
-#            return data[-1]
-#        else:
-#            curr = data[-1]
-#            prev = avg(data[:-1])
-#            return {key: (alpha * curr[key] + (1-alpha) * prev[key] if key not in exceptions else curr[key]) for key in curr.keys()}
-#    return avg(feature_data)
-
-def get_tilt_features(profile, head_rotation, head_translation, landmarks):
-    #NOSE_LENGTH = distance(landmarks[])
-    features = {
-        "measured_tilt_degrees": float(head_rotation[0]),
-        "lip_spacing": float(landmarks[51][1] - landmarks[57][1] - profile.resting_lip_distance),
-        "eyebrow_elevation": float(landmarks[27][1] - (landmarks[19][1] + landmarks[24][1]) / 2 - profile.resting_eyebrow_elevation)
-    }
-
-    features['chatter'] = np.random.normal() if features['lip_spacing'] > profile.chatter_lip_distance else 0
-
-    sliding_window.append(features)
-    if len(sliding_window) > WINDOW_LENGTH:
-        sliding_window.pop(0)
-    filtered_features = ewma(sliding_window, set("eyebrow_elevation"))
-    return filtered_features
-
-def get_tilt_weights(profile):
-    return profile.weights
-
-def dot_product(features, weights):
-    return sum([feature_val * weights[feature_label] for feature_label, feature_val in features.items()])
-
-def log_features_weights(features, weights):
-    description = ""
-    for feature_label, feature_val in features.items():
-      description += f"{feature_label}: {feature_val:.3f} * {weights[feature_label]} = {feature_val * weights[feature_label]:.3f} | "
-    description = f"Final Angle: {dot_product(features, weights):.3f}\n" + description
-    print(description)
 
 def ewma(data):
     data.reverse()
@@ -384,8 +317,5 @@ def rotate_marble(tilt, pan):
 #############################
 #          Special          #
 #############################
-#__name__ is a special Python variable
-#1. If you run THIS script using Gitbash: the __name__ variable within this script equals '__main__'
-#2. If you create another script import_script.py that IMPORTS THIS SCRIPT using 'import msync':the __name__ variable within import_script.py equals 'msync'
 if __name__ == '__main__':
     main()
