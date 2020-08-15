@@ -188,7 +188,7 @@ def main():
                     #print(landmarks[51][1] - landmarks[57][1])
                     #print(landmarks[24][1] - landmarks[44][1])
 
-                    g_noise = tuple(numpy.random.normal(scale=3.0) for _ in range(3)) if abs(landmarks[51][1] - landmarks[57][1] + 20) > 5 else (0, 0, 0)
+                    g_noise = tuple(numpy.random.normal(scale=3.0) for _ in range(3)) if True else (0, 0, 0)
 
                     #converted_rotation = tuple(jbr(rot) for rot in rotation)
                     converted_rotation = tuple(rotation[i] + rotation_offsets[i] for i in range(3)) 
@@ -330,7 +330,7 @@ def detect(frame, mark=False):
     #landmarks, img_points = 0, 0
     landmarks = np.empty((0, 2), dtype=np.float32)      # landmarks and img_points will default to Empty if the detector cannot detect a face, in which case the for-loops below wouldn't run
     img_points = np.empty((0, 2), dtype=np.float32)
-    face = faces[0]     # Only operate on the first face detected. If you want to do multiple faces, 'landmarks' and 'img_points' would have to be LISTS of the landmarks and image points for each face!
+    face = faces[0] if faces else None    # Only operate on the first face detected. If you want to do multiple faces, 'landmarks' and 'img_points' would have to be LISTS of the landmarks and image points for each face!
 
     if face:
         # Boxing out the faces
@@ -343,10 +343,7 @@ def detect(frame, mark=False):
         for i in [17, 21, 22, 26, 36, 39, 42, 45, 31, 35, 48, 54, 57, 8]:       # range(68)   [33, 8, 45, 36, 54, 48]
             x = p.part(i).x
             y = p.part(i).y
-            test += 1
-            image_points = np.append(img_points, np.array([[x, y]]), axis=0)
-            img_points = image_points
-            print(len(img_points))
+            img_points = np.append(img_points, np.array([[x, y]]), axis=0)
             if mark:
                 cv2.circle(frame, (x, y), 3, (255, 0, 0), -1)
         for i in range(68):       # range(68)   [33, 8, 45, 36, 54, 48]
