@@ -15,9 +15,10 @@ IMAGE_RESCALE = 75
 VIDEO_RESCALE = 50
 
 # Lip/Speech Feature
-K_SPEECH = 1.0
+SPEECH_FILTER_LENGTH = 5
+K_SPEECH = 2.0
 SPEECH_OFFSET = 20
-SPEECH_THRESHOLD = 20
+SPEECH_THRESHOLD = 2
 
 # Gaussian Noise in pan and tilt while talking
 NOISE_PERIOD = 5
@@ -142,6 +143,7 @@ def main():
             cv2.waitKey(0)
         else:
             moving_average = []
+            speech_filter = [0] * SPEECH_FILTER_LENGTH
 
             calibration = []
             lipCalibration = []
@@ -174,7 +176,7 @@ def main():
 
                     if not calibrated:
                         calibration.append(rotation)
-                        lipCalibration.append(float(landmarks[51][1] - landmarks[57][1]))
+                        lipCalibration.append(get_lip_dist(landmarks))
                         #print(calibration)
                         if len(calibration) > CALIBRATION_LENGTH:
                             averages = [sum([rot[i] for rot in calibration]) / CALIBRATION_LENGTH for i in range(3)]
@@ -189,13 +191,17 @@ def main():
                             moving_average.pop(0)
 
                         rotation = [ewma([rot[i] for rot in moving_average]) for i in range(3)]
-                        mouth_size = landmarks[51][1] - landmarks[57][1] + SPEECH_OFFSET
                         if landmarks.size != 0:
-                            rotation[0] += -K_SPEECH * mouth_size        # nodding
+                            mouth_size = get_lip_dist(landmarks) - SPEECH_OFFSET
+                            mouth_size = mouth_size if abs(mouth_size) > SPEECH_THRESHOLD else 0
+                            print(f"Mouth size: {mouth_size}")
+                            speech_filter.append(mouth_size)
+                            speech_filter.pop(0)
+                            rotation[0] += K_SPEECH * median(speech_filter)        # nodding
 
-                        if count % NOISE_PERIOD == 0:
-                            g_noise = tuple(np.random.normal(scale=NOISE_INTENSITY[i]) for i in range(3)) if mouth_size > SPEECH_THRESHOLD else (0, 0, 0)
-                            # print("Adding noise")
+                            if count % NOISE_PERIOD == 0:
+                                g_noise = tuple(np.random.normal(scale=NOISE_INTENSITY[i]) for i in range(3)) if False and mouth_size > SPEECH_THRESHOLD else (0, 0, 0)
+                                # print("Adding noise")
                         count += 1
 
                         converted_rotation = tuple(rotation[i] + rotation_offset[i] + g_noise[i] * ((count % NOISE_PERIOD) + 1) / NOISE_PERIOD for i in range(3))
@@ -277,6 +283,9 @@ def median(data):
     # print(f"Max: {max(data)} Min: {min(data)} Median: {m}")
     return m
 
+def get_lip_dist(landmarks):
+    return float(distance(landmarks[52], landmarks[58]))
+
 def rect_to_coor(rect):
     x1 = rect.left()        # These assignments grab the coordinates of the top left and bottom right points of the rectangle[] object
     y1 = rect.top()
@@ -314,7 +323,7 @@ def detect(frame, mark=False):
             x = p.part(i).x
             y = p.part(i).y
             landmarks = np.append(landmarks, np.array([[x, y]]), axis=0)
-            if i in range(17, 22) or i in range(22, 27):
+            if True or i in range(17, 22) or i in range(22, 27):
                 cv2.circle(frame, (x, y), 3, (0, 255, 0), -1)
     return frame, landmarks, img_points
 
