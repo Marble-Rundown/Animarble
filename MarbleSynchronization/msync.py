@@ -154,7 +154,7 @@ def main():
                         quit()
                 
                 s, frame = cap.read()
-                assert s, 'Failed to read next frame'
+                assert s, 'Capture has ended'
                 frame, landmarks, img_points = detect(frame, mark=True)
                 frame = rescale_frame(frame, percent=rescale)
 
