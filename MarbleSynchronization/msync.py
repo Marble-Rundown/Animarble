@@ -1,4 +1,3 @@
-
 import os, argparse, dlib, cv2, pygame, math
 import numpy as np
 from pose_estimator import PoseEstimator
@@ -15,13 +14,18 @@ IMAGE_RESCALE = 75
 VIDEO_RESCALE = 50
 
 # Lip/Speech Feature
-K_SPEECH = 1.0
+K_SPEECH = 1.8
 SPEECH_OFFSET = 20
-SPEECH_THRESHOLD = 10
+SPEECH_THRESHOLD = 100000000
 
 # Gaussian Noise in pan and tilt while talking
-NOISE_PERIOD = 7
-NOISE_INTENSITY = 2.0
+NOISE_PERIOD = 5
+NOISE_INTENSITY = (4.0, 3.0, 0.0)
+
+MOVING_AVERAGE_LENGTH = 3
+
+CALIBRATION_LENGTH = 10
+
 
 
 #############################
@@ -42,14 +46,14 @@ ap = argparse.ArgumentParser()      # Create an instance of an ArgumentParser ob
 ap.add_argument('-i', '--image', type=check_str, help='The path to the image')      # Adds an argument '--image' that describes the image file path
 ap.add_argument('-v', '--video', type=check_str, help='The path to the video')      # Adds an argument '--video' that describes the video file path
 ap.add_argument('-s', '--stream', help='Set this to True to start in livestream mode')      # Adds an argument '--stream' that determines whether to use the webcam
-ap.add_argument('-m', '--marble', required=True, help='The marble being recorded')
+# ap.add_argument('-m', '--marble', required=True, help='The output filename to write to')
 args = vars(ap.parse_args())        # Vars() returns the __dict__ attribute of an object, so args is a dictionary of the command line parameters passed to this program
-num_args = len([a for a in args.values() if a])
-if num_args != 2:
-    raise TypeError(f'Expected 2 arguments, but received {num_args} argument(s)')
-marble = args['marble'].lower()
-if marble not in ['left', 'right']:
-    raise TypeError(f"'{marble}' is not a valid marble")
+# num_args = len([a for a in args.values() if a])
+# if num_args != 2:
+#     raise TypeError(f'Expected 2 arguments, but received {num_args} argument(s)')
+filename = "unnamed"
+# if marble not in ['bob', 'dan', 'drew']:
+#     raise TypeError(f"'{marble}' is not a valid marble")
 
 file_type = ''      # Initialize variables based on target type
 target = None
@@ -61,8 +65,10 @@ if args['image']:
     dimensions = tuple(image.shape[i] * IMAGE_RESCALE / 100 for i in range(2))
     rescale = IMAGE_RESCALE
 elif args['video']:
+    filename = os.path.splitext(os.path.basename(args['video']))[0]
+    print(filename)
     file_type = 'video'
-    cap = cv2.VideoCapture('media/' + args['video'])
+    cap = cv2.VideoCapture(args['video'])
     assert cap.isOpened(), 'Failed to open video file'
     _, first_frame = cap.read()
     dimensions = tuple(first_frame.shape[i] * VIDEO_RESCALE / 100 for i in range(2))
@@ -121,8 +127,8 @@ glRotatef(0, 0, 0, 0)
 def main():
     rotation, translation = (), ()
 
-    with create_file(marble, 'csv') as file:
-        file.write('timestamp,tilt,pan,pan_setpoint\n')
+    with create_file(filename, 'csv') as file:
+        file.write('timestamp,tilt,pan,tilt_setpoint,pan_setpoint\n')
 
         if file_type == 'image':
             frame, landmarks, img_points = detect(image, mark=True)
@@ -135,11 +141,10 @@ def main():
             cv2.waitKey(0)
         else:
             moving_average = []
-            n = 6
 
             calibration = []
+            lipCalibration = []
             calibrated = False
-            c_n = 30
             rotation_offset = (0, 0, 0)
 
             g_noise = (0, 0, 0)
@@ -154,7 +159,10 @@ def main():
                         quit()
                 
                 s, frame = cap.read()
-                assert s, 'Capture has ended'
+                if not(s):
+                    print("exiting!")
+                    break
+
                 frame, landmarks, img_points = detect(frame, mark=True)
                 frame = rescale_frame(frame, percent=rescale)
 
@@ -165,32 +173,40 @@ def main():
 
                     if not calibrated:
                         calibration.append(rotation)
+                        lipCalibration.append(float(landmarks[51][1] - landmarks[8][1]))
                         #print(calibration)
-                        if len(calibration) > c_n:
-                            averages = [sum([rot[i] for rot in calibration]) / c_n for i in range(3)]
+                        if len(calibration) > CALIBRATION_LENGTH:
+                            averages = [sum([rot[i] for rot in calibration]) / CALIBRATION_LENGTH for i in range(3)]
                             rotation_offset = tuple(-avg for avg in averages)
+                            SPEECH_OFFSET = np.mean(lipCalibration)
                             calibrated = True
-                    
-                    moving_average.append(rotation)
-                    if len(moving_average) > n:
-                        moving_average.pop(0)
+                            print(f"Speech offset: {SPEECH_OFFSET}")
+                            print("done calibrating")
+                    else:
+                        moving_average.append(rotation)
+                        if len(moving_average) > MOVING_AVERAGE_LENGTH:
+                            moving_average.pop(0)
 
-                    rotation = [ewma([rot[i] for rot in moving_average]) for i in range(3)]
-                    mouth_size = landmarks[51][1] - landmarks[57][1] + SPEECH_OFFSET
-                    if landmarks.size != 0:
-                        rotation[0] += -K_SPEECH * mouth_size        # nodding
+                        # rotation = [ewma([rot[i] for rot in moving_average]) for i in range(3)]
+                        mouth_size = landmarks[51][1] - landmarks[8][1] - SPEECH_OFFSET
+                        print(mouth_size)
+                        if landmarks.size != 0:
+                            rotation[0] += -K_SPEECH * mouth_size        # nodding
 
-                    if count % NOISE_PERIOD == 0:
-                        g_noise = tuple(np.random.normal(scale=NOISE_INTENSITY) for _ in range(3)) if mouth_size > SPEECH_THRESHOLD else (0, 0, 0)
-                    count += 1
+                        rotation = [ewma([rot[i] for rot in moving_average]) for i in range(3)]
 
-                    converted_rotation = tuple(rotation[i] + rotation_offset[i] + g_noise[i] * ((count % NOISE_PERIOD) + 1) / NOISE_PERIOD for i in range(3))
-                    tilt, pan = converted_rotation[0], converted_rotation[1]
+                        if count % NOISE_PERIOD == 0:
+                            g_noise = tuple(np.random.normal(scale=NOISE_INTENSITY[i]) for i in range(3)) if abs(mouth_size) > SPEECH_THRESHOLD else (0, 0, 0)
+                            # print("Adding noise")
+                        count += 1
 
-                    print('timestamp:{3}\npitch:{0}\nyaw:{1}\nroll{2}\n'.format(*converted_rotation, cap.get(cv2.CAP_PROP_POS_MSEC)))
-                    file.write('{0},{1},{2},0\n'.format(int(cap.get(cv2.CAP_PROP_POS_MSEC)), jbr(tilt)[0], jbr(pan)[0]))
-                    
-                    rotate_marble(tilt, pan)
+                        converted_rotation = tuple(rotation[i] + rotation_offset[i] + g_noise[i] * ((count % NOISE_PERIOD) + 1) / NOISE_PERIOD for i in range(3))
+                        tilt, pan = converted_rotation[0], converted_rotation[1]
+
+                        # print('timestamp:{3}\npitch:{0}\nyaw:{1}\nroll{2}\n'.format(*converted_rotation, cap.get(cv2.CAP_PROP_POS_MSEC)))
+                        file.write('{0},{1},{2},0\n'.format(int(cap.get(cv2.CAP_PROP_POS_MSEC)), jbr(tilt), jbr(pan)))
+                        
+                        rotate_marble(round(float(tilt)), round(float(pan)))
                 else:
                     print('Failed to find image points')
 
@@ -258,6 +274,11 @@ def ewma(data):
             return alpha * curr + (1 - alpha) * avg(data)
     return avg(data)
 
+def median(data):
+    m = np.median(data) 
+    # print(f"Max: {max(data)} Min: {min(data)} Median: {m}")
+    return m
+
 def rect_to_coor(rect):
     x1 = rect.left()        # These assignments grab the coordinates of the top left and bottom right points of the rectangle[] object
     y1 = rect.top()
@@ -289,13 +310,14 @@ def detect(frame, mark=False):
             x = p.part(i).x
             y = p.part(i).y
             img_points = np.append(img_points, np.array([[x, y]]), axis=0)
-            if mark:
-                cv2.circle(frame, (x, y), 3, (255, 0, 0), -1)
+            # if mark:
+            #     cv2.circle(frame, (x, y), 3, (255, 0, 0), -1)
         for i in range(68):       # range(68)   [33, 8, 45, 36, 54, 48]
             x = p.part(i).x
             y = p.part(i).y
             landmarks = np.append(landmarks, np.array([[x, y]]), axis=0)
-            if i in range(17, 22) or i in range(22, 27):
+            # if i in range(17, 22) or i in range(22, 27):
+            if mark:
                 cv2.circle(frame, (x, y), 3, (0, 255, 0), -1)
     return frame, landmarks, img_points
 
