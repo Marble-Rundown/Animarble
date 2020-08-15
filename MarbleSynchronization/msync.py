@@ -1,5 +1,5 @@
 
-import dlib, pygame
+import dlib, pygame, math
 import cv2
 import argparse
 import numpy as np
@@ -19,26 +19,20 @@ WINDOW_TITLE = 'Facial Landmark Detector'
 IMAGE_RESCALE = 75
 VIDEO_RESCALE = 50
 
-#LOW_PASS = 20
-
-WINDOW_LENGTH = 3
+# Lip Feature
 K_SPEECH = 1.0
-#K_EYEBROW = 1.0
+SPEECH_OFFSET = 20
 
-#tilt_weight = {'speech_exaggeration_multiplier': 1.0,
-#            'resting_lip_spacing': 20
-#    }
-#tilt
-
-#pan_template
-
-
-
+# Gaussian Noise in pan and tilt
+NOISE_PERIOD = 7
+NOISE_INTENSITY = 2.0
 
 
 #############################
 #       Initialization      #
 #############################
+np.random.seed(5327)
+
 # Computer Vision Initialization
 detector = dlib.get_frontal_face_detector()     # Get a face detector from the dlib library
 predictor = dlib.shape_predictor('assets/shape_predictor_68_face_landmarks.dat')      # Get a shape predictor based on a trained model from the dlib library
@@ -148,9 +142,12 @@ def main():
             calibration = []
             calibrated = False
             c_n = 30
-            rotation_offsets = (0, 0, 0)
+            rotation_offset = (0, 0, 0)
 
-            #profile = Profile("Jeffrey")
+            g_noise = None
+            count = 0
+
+            profile = Profile("Jeffrey")
 
             while cap.isOpened():           # Main while loop
                 for event in pygame.event.get():        # Pygame
@@ -173,29 +170,33 @@ def main():
                         #print(calibration)
                         if len(calibration) > c_n:
                             averages = [sum([rot[i] for rot in calibration]) / c_n for i in range(3)]
-                            rotation_offsets = tuple(-avg for avg in averages)
+                            rotation_offset = tuple(-avg for avg in averages)
                             calibrated = True
                     
                     #print(img_points)
                     #if len(rotation) != 0:
+
                     moving_average.append(rotation)
                     if len(moving_average) > n:
                         moving_average.pop(0)
                     #rotation = [sum([rot[i] for rot in moving_average]) / n for i in range(3)] 
                     rotation = [ewma([rot[i] for rot in moving_average]) for i in range(3)]
                     if landmarks.size != 0:
-                        rotation[0] += -K_SPEECH * (landmarks[51][1] - landmarks[57][1] + 20)        # nodding
+                        rotation[0] += -K_SPEECH * (landmarks[51][1] - landmarks[57][1] + SPEECH_OFFSET)        # nodding
+
                     #print(landmarks[51][1] - landmarks[57][1])
                     #print(landmarks[24][1] - landmarks[44][1])
 
-                    g_noise = tuple(numpy.random.normal(scale=3.0) for _ in range(3)) if True else (0, 0, 0)
-
+                    if count % NOISE_PERIOD == 0:
+                        g_noise = tuple(np.random.normal(scale=NOISE_INTENSITY) for _ in range(3))            
+                    count += 1
                     #converted_rotation = tuple(jbr(rot) for rot in rotation)
-                    converted_rotation = tuple(rotation[i] + rotation_offsets[i] for i in range(3)) 
+                    converted_rotation = tuple(rotation[i] + rotation_offset[i] + g_noise[i] * ((count % NOISE_PERIOD) + 1) / NOISE_PERIOD for i in range(3))
+                    tilt, pan = converted_rotation[0], converted_rotation[1]
 
                     #tilt_weights = get_tilt_weights(profile)
 
-                    #tilt_features = get_tilt_features(profile, rotation, translation, landmarks)
+                    #tilt_features = get_tilt_features(profile, converted_rotation, translation, landmarks)
                     
                     #log_features_weights(tilt_features, tilt_weights)
 
@@ -211,12 +212,12 @@ def main():
                             #rot_frame[1] = rot_frame[0]
                                 
 
-                    #print('timestamp:{3}\npitch:{0}\nyaw:{1}\nroll{2}\n'.format(*converted_rotation, cap.get(cv2.CAP_PROP_POS_MSEC)))
-                    #print(rotation_offsets)
-                    file.write('{0},{1},{2}\n'.format(int(cap.get(cv2.CAP_PROP_POS_MSEC)), converted_rotation[0][0], converted_rotation[1][0]))
-
-                    #rotate_marble(pan, tilt)
-                    rotate_marble(converted_rotation[0], converted_rotation[1])
+                    print('timestamp:{3}\npitch:{0}\nyaw:{1}\nroll{2}\n'.format(*converted_rotation, cap.get(cv2.CAP_PROP_POS_MSEC)))
+                    #print(rotation_offset)
+                    #file.write('{0},{1},{2}\n'.format(int(cap.get(cv2.CAP_PROP_POS_MSEC)), converted_rotation[0][0], converted_rotation[1][0]))
+                    file.write('{0},{1},{2}\n'.format(int(cap.get(cv2.CAP_PROP_POS_MSEC)), tilt, pan))
+                    rotate_marble(tilt, pan)
+                    #rotate_marble(tilt + rotation_offset[0], pan + rotation_offset[1])
                 else:
                     print('Failed to find image points')
 
@@ -235,23 +236,27 @@ def main():
 #############################
 class Profile:
     def __init__(self, name):
-        if name == "Jaiveer":
+        if name == 'Jaiveer':
             self.resting_tilt = 32
             self.resting_lip_distance = 0
+            self.chatter_lip_distance = 5
             self.resting_eyebrow_elevation = 43
             self.weights = {
-                "measured_tilt_degrees": 1,
-                "lip_spacing": 3,
-                "eyebrow_elevation": -5
+                'measured_tilt_degrees': 1,
+                'lip_spacing': 3,
+                'eyebrow_elevation': -5, 
+                'chatter': 0
             }
-        elif name == "Jeffrey":
+        elif name == 'Jeffrey':
             self.resting_tilt = 20
-            self.resting_lip_distance = 2
+            self.resting_lip_distance = 20
+            self.chatter_lip_distance = 5
             self.resting_eyebrow_elevation = 32
             self.weights = {
-                "measured_tilt_degrees": 1,
-                "lip_spacing": 3,
-                "eyebrow_elevation": -3
+                'measured_tilt_degrees': 1,
+                'lip_spacing': 0,
+                'eyebrow_elevation': 0,
+                'chatter': 0
             }
 
 
@@ -279,11 +284,14 @@ def create_file(file_name, file_type, n=0):
 #    return avg(feature_data)
 
 def get_tilt_features(profile, head_rotation, head_translation, landmarks):
+    #NOSE_LENGTH = distance(landmarks[])
     features = {
-        "measured_tilt_degrees": float(head_rotation[0] - profile.resting_tilt),
-        "lip_spacing": float(landmarks[66][1] - landmarks[62][1] - profile.resting_lip_distance),
+        "measured_tilt_degrees": float(head_rotation[0]),
+        "lip_spacing": float(landmarks[51][1] - landmarks[57][1] - profile.resting_lip_distance),
         "eyebrow_elevation": float(landmarks[27][1] - (landmarks[19][1] + landmarks[24][1]) / 2 - profile.resting_eyebrow_elevation)
     }
+
+    features['chatter'] = np.random.normal() if features['lip_spacing'] > profile.chatter_lip_distance else 0
 
     sliding_window.append(features)
     if len(sliding_window) > WINDOW_LENGTH:
@@ -324,19 +332,23 @@ def rect_to_coor(rect):
     y2 = rect.bottom()
     return (x1, y1), (x2, y2)
 
+def distance(a, b):
+    return math.sqrt((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2)
+
 def detect(frame, mark=False):
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     faces = detector(gray)
     #landmarks, img_points = 0, 0
     landmarks = np.empty((0, 2), dtype=np.float32)      # landmarks and img_points will default to Empty if the detector cannot detect a face, in which case the for-loops below wouldn't run
     img_points = np.empty((0, 2), dtype=np.float32)
+    
     face = faces[0] if faces else None    # Only operate on the first face detected. If you want to do multiple faces, 'landmarks' and 'img_points' would have to be LISTS of the landmarks and image points for each face!
 
     if face:
         # Boxing out the faces
         if mark:
             TL, BR = rect_to_coor(face)
-            cv2.rectangle(frame, TL, BR, (0, 255, 0), 3)        # From these two points, we can draw a 
+            cv2.rectangle(frame, TL, BR, (0, 255, 0), 3)        # From these two points, we can draw a rectanngle
 
         # Calculating landmarks
         p = predictor(gray, face)
