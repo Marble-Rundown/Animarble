@@ -16,7 +16,7 @@ VIDEO_RESCALE = 50
 
 # Lip/Speech Feature
 SPEECH_FILTER_LENGTH = 5
-K_SPEECH = 2.0
+K_SPEECH = 1.5
 SPEECH_OFFSET = 20
 SPEECH_THRESHOLD = 2
 
@@ -208,7 +208,7 @@ def main():
                         tilt, pan = converted_rotation[0], converted_rotation[1]
 
                         # print('timestamp:{3}\npitch:{0}\nyaw:{1}\nroll{2}\n'.format(*converted_rotation, cap.get(cv2.CAP_PROP_POS_MSEC)))
-                        file.write('{0},{1},{2},0\n'.format(int(cap.get(cv2.CAP_PROP_POS_MSEC)), jbr(tilt), jbr(pan)))
+                        file.write('{0},{1},{2},0\n'.format(int(cap.get(cv2.CAP_PROP_POS_MSEC)), jbr(tilt)[0], jbr(pan)[0]))
                         
                         rotate_marble(round(float(tilt)), round(float(pan)))
                 else:

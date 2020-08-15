@@ -13,7 +13,7 @@ def check_float(value):
         raise argparse.ArgumentTypeError(f"'{value}' is not a float")
     return value
 ap = argparse.ArgumentParser()
-# ap.add_argument('-f', '--function', required=True, type=check_str, help='The name of the overall void function')
+ap.add_argument('-f', '--function', required=True, type=check_str, help='The name of the overall void function')
 ap.add_argument('-s', '--scale', required=True, help='A multiplier for video speed')
 ap.add_argument('-l', '--leftFile', required=True, help='Left file')
 ap.add_argument('-r', '--rightFile', required=True, help='Right file')
@@ -35,7 +35,7 @@ print(leftFile)
                 # if Left Video starts after Right Video, offset is negative
 K = 2       # number of 33ms time intervals per interval in the final file
 OVERALL_FUNCTION = functionName #args['function']
-MARBLE_FUNCTION = 'moveMarbles'       # Name of the Arduino function that rotates the marbles
+MARBLE_FUNCTION = 'marbleSynchronizer.moveMarbles'       # Name of the Arduino function that rotates the marbles
 
 MIN_TILT = 60
 MAX_TILT = 110
@@ -56,7 +56,7 @@ def main():
     left_interval, right_interval = sum([left[i+1][0] - left[i][0] for i in range(len(left) - 1)]) / len(left), sum([right[i+1][0] - right[i][0] for i in range(len(right) - 1)]) / len(right)
     interval = (left_interval + right_interval) / 2
 
-    output = create_file('final', 'h')
+    output = create_file('final', 'txt')
     output.write(f'void {OVERALL_FUNCTION}()')
     output.write('{\n')
 
@@ -104,7 +104,7 @@ def most_recent_file(keyword):
 
 def csv_to_list(file_name):
     contents = []
-    with open(f'outputs/{file_name}', newline='') as csv_file:
+    with open(file_name, newline='') as csv_file:
         csv_reader = csv.reader(csv_file, delimiter=',', quotechar='|')
         for row in csv_reader:
             if 'timestamp' not in row:
