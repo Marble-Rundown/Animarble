@@ -24,7 +24,8 @@ args = vars(ap.parse_args())
 leftFile = args['leftFile']
 rightFile = args['rightFile']
 
-functionName = os.path.splitext(os.path.basename(leftFile))[0].split("_")[0]
+# functionName = os.path.splitext(os.path.basename(leftFile))[0].split("_")[0]
+functionName = args['function']
 print(functionName)
 print(leftFile)
 
@@ -65,23 +66,30 @@ def main():
     line = 0
     timestamp = 0
     while len(left) > 0 or len(right) > 0:
+        print(len(left))
+        # print(last_left)
         if len(left) < K:       # check if list will soon be emptied
             left_ended = True
             diff = K - len(left)
             for i in range(diff):
-                left.append([timestamp, last_left[0], last_left[1], 0])
+                left.append([timestamp, last_left[0], last_left[1], 90, 90])
         if len(right) < K:       # check if list will soon be emptied
             right_ended = True
             diff = K - len(right)
             for i in range(diff):
-                right.append([timestamp, last_right[0], last_right[1], 0])
-                
-        left_tilt = int(round(sum([left[i][1] for i in range(K)]) / K))
-        left_pan = int(round(sum([left[i][2] + left[i][3] for i in range(K)]) / K))
-        right_tilt = int(round(sum([right[i][1] for i in range(K)]) / K))
-        right_pan = int(round(sum([right[i][2] + right[i][3] for i in range(K)]) / K))
+                right.append([timestamp, last_right[0], last_right[1], 90, 90])        
+
+        left_tilt = int(round(sum([left[i][1] + left[i][3] for i in range(K)]) / K))
+        left_pan = int(round(sum([left[i][2] + left[i][4] for i in range(K)]) / K))
+        last_left_tilt_offset = left[K-1][3]
+        last_left_pan_offset = left[K-1][4]
+
+        right_tilt = int(round(sum([right[i][1] + right[i][3] for i in range(K)]) / K))
+        right_pan = int(round(sum([right[i][2] + right[i][4] for i in range(K)]) / K))
+        last_right_tilt_offset = right[K-1][3]
+        last_right_pan_offset = right[K-1][4]
         
-        last_left, last_right = (left_tilt, left_pan), (right_tilt, right_pan)
+        last_left, last_right = (left_tilt, left_pan, last_left_tilt_offset, last_left_pan_offset), (right_tilt, right_pan, last_right_tilt_offset, last_right_pan_offset)
         timestamp = line * interval * K * MULTIPLIER
 
         output.write('  // Row {0}{1}{2}\n'.format(line * K + 2, ', left ended' if left_ended else '', ', right ended' if right_ended else ''))

@@ -61,6 +61,7 @@ file_type = ''      # Initialize variables based on target type
 target = None
 rescale = 100
 dimensions = ()
+video_length = 0
 if args['image']:
     file_type = 'image'
     image = cv2.imread('media/' + args['image'])
@@ -74,6 +75,9 @@ elif args['video']:
     assert cap.isOpened(), 'Failed to open video file'
     _, first_frame = cap.read()
     dimensions = tuple(first_frame.shape[i] * VIDEO_RESCALE / 100 for i in range(2))
+    cap.set(cv2.CAP_PROP_POS_AVI_RATIO, 1)
+    video_length = cap.get(cv2.CAP_PROP_POS_MSEC)
+    cap.set(cv2.CAP_PROP_POS_AVI_RATIO, 0)
     rescale = VIDEO_RESCALE
 elif args['stream']:
     file_type = 'stream'
@@ -194,7 +198,7 @@ def main():
                         if landmarks.size != 0:
                             mouth_size = get_lip_dist(landmarks) - SPEECH_OFFSET
                             mouth_size = mouth_size if abs(mouth_size) > SPEECH_THRESHOLD else 0
-                            print(f"Mouth size: {mouth_size}")
+                            # print(f"Mouth size: {mouth_size}")
                             speech_filter.append(mouth_size)
                             speech_filter.pop(0)
                             rotation[0] += K_SPEECH * median(speech_filter)        # nodding
@@ -208,7 +212,14 @@ def main():
                         tilt, pan = converted_rotation[0], converted_rotation[1]
 
                         # print('timestamp:{3}\npitch:{0}\nyaw:{1}\nroll{2}\n'.format(*converted_rotation, cap.get(cv2.CAP_PROP_POS_MSEC)))
-                        file.write('{0},{1},{2},0\n'.format(int(cap.get(cv2.CAP_PROP_POS_MSEC)), jbr(tilt)[0], jbr(pan)[0]))
+                        time = cap.get(cv2.CAP_PROP_POS_MSEC)
+                        # file.write('{0},{1},{2},0,0\n'.format(int(time), jbr(tilt)[0], jbr(pan)[0]))
+                        file.write('{0},{1},{2},90,90\n'.format(int(time), tilt[0], pan[0]))
+
+                        completion = int(round(time / video_length * 100))
+                        print(video_length)
+                        print(time)
+                        print(f'{completion}% done')
                         
                         rotate_marble(round(float(tilt)), round(float(pan)))
                 else:
