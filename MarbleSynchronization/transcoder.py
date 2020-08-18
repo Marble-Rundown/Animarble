@@ -54,8 +54,10 @@ def main():
     # bobFile, right = most_recent_file('left'), most_recent_file('right')
     left, right = csv_to_list(leftFile), csv_to_list(rightFile)
 
-    left_interval, right_interval = sum([left[i+1][0] - left[i][0] for i in range(len(left) - 1)]) / len(left), sum([right[i+1][0] - right[i][0] for i in range(len(right) - 1)]) / len(right)
-    interval = (left_interval + right_interval) / 2
+    # left_interval, right_interval = sum([left[i+1][0] - left[i][0] for i in range(len(left) - 1)]) / len(left), sum([right[i+1][0] - right[i][0] for i in range(len(right) - 1)]) / len(right)
+    # interval = (left_interval + right_interval) / 2
+
+    interval = left[-1][0] / len(left) if len(left) > len(right) else right[-1][0] / len(right)
 
     output = create_file('final', 'txt')
     output.write(f'void {OVERALL_FUNCTION}()')
@@ -66,7 +68,7 @@ def main():
     line = 0
     timestamp = 0
     while len(left) > 0 or len(right) > 0:
-        print(len(left))
+        # print(len(left))
         # print(last_left)
         if len(left) < K:       # check if list will soon be emptied
             left_ended = True
