@@ -6,6 +6,8 @@ import csv
 import os
 import argparse
 
+from utils import create_unique_filename
+
 ''' Constants '''
 MOVEMENT_FUNCTION = 'marbleSynchronizer.moveMarbles'
 
@@ -19,16 +21,6 @@ ap.add_argument('-f', '--function',
 args = ap.parse_args()
 
 msync_file = args.input
-
-
-def create_unique_filename(filename, n=0):
-    file_base, ext = os.path.splitext(filename)
-    destination = f"{file_base}{f'({n})' if n > 0 else ''}{ext}"
-    if not os.path.isfile(destination):
-        return destination
-    else:
-        return create_unique_filename(filename, n+1)
-
 
 output_filename = None
 if args.output is None:
