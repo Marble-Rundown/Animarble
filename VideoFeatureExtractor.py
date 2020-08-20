@@ -53,17 +53,13 @@ def detect(frame, mark=False):
 
     p = predictor(grayFrame, face)
 
-    # landmarks and img_points will default to Empty if the detector cannot detect a face, in which case the for-loops below wouldn't run
-    landmarks = np.empty((0, 2), dtype=np.float32)
-    pose_estimation_pts = np.empty((0, 2), dtype=np.float32)
+    # Collect facial landmarks
+    landmarks = np.vstack(
+        [np.array([[p.part(i).x, p.part(i).y]], dtype=np.float32) for i in range(68)])
 
-    for i in range(68):
-        pt = np.array([[p.part(i).x, p.part(i).y]])
-        landmarks = np.vstack((landmarks, pt))
-
-        # Select landmarks that correspond to shape predictor for pose estimation
-        if i in [17, 21, 22, 26, 36, 39, 42, 45, 31, 35, 48, 54, 57, 8]:
-            pose_estimation_pts = np.vstack((pose_estimation_pts, pt))
+    # Select landmarks that correspond to shape predictor for pose estimation
+    pose_estimation_pts = np.vstack(
+        [np.array([[p.part(i).x, p.part(i).y]], dtype=np.float32) for i in [17, 21, 22, 26, 36, 39, 42, 45, 31, 35, 48, 54, 57, 8]])
 
     # Optionally annotate image
     if mark:
