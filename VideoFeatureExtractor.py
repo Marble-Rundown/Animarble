@@ -148,6 +148,9 @@ def main():
             if cv2.waitKey(1) & 0xFF == 27:     # 27 is ASCII for the Esc key on a keyboard
                 break
 
+        cap.release()
+        cv2.destroyAllWindows()
+
     print(f"Time consumed: {time.process_time() - start_time}")
     print(f"Video feature data exported to: {output_filename}")
 
