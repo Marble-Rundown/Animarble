@@ -46,8 +46,8 @@ output_filename = args.output if args.output is not None else create_unique_file
 ROTATION_FILTER_LENGTH = 5
 
 LIP_DIST_FILTER_LENGTH = 5
-LIP_DIST_MINIMUM_THRESHOLD = 10
-LIP_DIST_MULTIPLIER = 0.5
+LIP_DIST_MINIMUM_THRESHOLD = 5
+LIP_DIST_MULTIPLIER = 2.0
 
 DEFAULT_PAN_SETPOINT = 90
 DEFAULT_TILT_SETPOINT = 90
@@ -204,10 +204,10 @@ def main():
                 filtered_rotation = ewma(
                     shifted_rotation_data, ROTATION_FILTER_LENGTH)
 
-                shifted_lip_dist = get_lip_dist(landmarks) - lip_dist_mean
+                shifted_lip_dist = get_lip_dist(
+                    landmarks) - lip_dist_mean - LIP_DIST_MINIMUM_THRESHOLD
 
-                thresholded_lip_dist = shifted_lip_dist if abs(
-                    shifted_lip_dist) > LIP_DIST_MINIMUM_THRESHOLD else 0
+                thresholded_lip_dist = max(shifted_lip_dist, 0)
 
                 shifted_lip_dist_data = np.append(
                     shifted_lip_dist_data, thresholded_lip_dist)
