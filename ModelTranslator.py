@@ -27,116 +27,149 @@ calibration_data_file = args.calibration
 should_display = args.should_display
 
 output_filename = args.output if args.output is not None else create_unique_filename(
-    f"outputs/ModelTranslator/{os.path.splitext(os.path.basename(video_file))[0]}.mdat")
+    f"outputs/ModelTranslator/{os.path.splitext(os.path.basename(video_data_file))[0]}.mdat")
 
-SPEECH_FILTER_LENGTH = 5
-K_SPEECH = 1.5
-SPEECH_OFFSET = 20
-SPEECH_THRESHOLD = 2
+''' Constants '''
+ROTATION_FILTER_LENGTH = 5
 
-# Gaussian Noise in pan and tilt while talking
-NOISE_PERIOD = 5
-NOISE_INTENSITY = (4.0, 3.0, 0.0)
 
-MOVING_AVERAGE_LENGTH = 3
+def get_lip_dist(landmarks):
+    return distance(landmarks[51], landmarks[57])
 
-CALIBRATION_LENGTH = 10
 
-np.random.seed(5327)
+def distance(a, b):
+    return np.linalg.norm(a-b)
 
-moving_average = []
-speech_filter = [0] * SPEECH_FILTER_LENGTH
 
-calibration = []
-lipCalibration = []
-calibrated = False
-rotation_offset = (0, 0, 0)
+def parse_row(row):
+    timestamp = int(row["timestamp"])
 
-g_noise = (0, 0, 0)
-count = 0
+    rotation = np.matrix([float(row[f"rot_{d}"]) for d in "xyz"])
+
+    position = np.matrix([float(row[f"pos_{d}"]) for d in "xyz"])
+
+    landmarks = np.matrix([[float(row[f"landmark_{i}_{d}"])
+                            for d in "xy"] for i in range(68)])
+
+    return timestamp, rotation, position, landmarks
+
+
+def old_ewma(data):
+    data.reverse()
+
+    def avg(data):
+        alpha = 2 / (len(data) + 1)
+        if len(data) == 1:
+            return data[0]
+        else:
+            curr = data[0]
+            # print(curr)
+            data.pop(0)
+            return alpha * curr + (1 - alpha) * avg(data)
+    return avg(data)
+
+
+def ewma(data, filter_length=None):
+    if filter_length == None or filter_length > len(data):
+        filter_length = len(data)
+    alpha = 2 / (len(data) + 1)
+
+    previous = data[-filter_length]
+    for d in data[-filter_length:]:
+        previous = alpha * d + (1-alpha) * previous
+
+    return previous
 
 
 def main():
-    while True:
-        # Handle Pygame quit
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                quit()
 
-        s, frame = cap.read()
-        if not(s):
-            print("exiting!")
-            break
+    # Calibration constants for consistent face detection
+    rotation_mean, rotation_std = None, None
+    lip_dist_mean, lip_dist_std = None, None
 
-            frame, landmarks, img_points = detect(frame, mark=True)
-            frame = rescale_frame(frame, percent=rescale)
+    # Use calibration data file to calibration rotation and lip constants
+    with open(calibration_data_file) as cal_file:
+        cal_reader = csv.DictReader(cal_file)
 
-            # print(len(img_points))
+        rotation_data = np.empty(shape=(0, 3))
+        lip_dist_data = np.empty(shape=0)
 
-            if img_points.size != 0:
-                rotation, translation = pe.estimate_pose(img_points)
+        for row in cal_reader:
+            timestamp, rotation, position, landmarks = parse_row(row)
 
-                if not calibrated:
-                    calibration.append(rotation)
-                    lipCalibration.append(get_lip_dist(landmarks))
-                    # print(calibration)
-                    if len(calibration) > CALIBRATION_LENGTH:
-                        averages = [sum([rot[i] for rot in calibration]) /
-                                    CALIBRATION_LENGTH for i in range(3)]
-                        rotation_offset = tuple(-avg for avg in averages)
-                        SPEECH_OFFSET = np.mean(lipCalibration)
-                        calibrated = True
-                        print(f"Speech offset: {SPEECH_OFFSET}")
-                        print("done calibrating")
-                else:
-                    moving_average.append(rotation)
-                    if len(moving_average) > MOVING_AVERAGE_LENGTH:
-                        moving_average.pop(0)
+            rotation_data = np.vstack(
+                (rotation_data, rotation))
 
-                    rotation = [ewma([rot[i] for rot in moving_average])
-                                for i in range(3)]
-                    if landmarks.size != 0:
-                        mouth_size = get_lip_dist(landmarks) - SPEECH_OFFSET
-                        mouth_size = mouth_size if abs(
-                            mouth_size) > SPEECH_THRESHOLD else 0
-                        # print(f"Mouth size: {mouth_size}")
-                        speech_filter.append(mouth_size)
-                        speech_filter.pop(0)
-                        rotation[0] += K_SPEECH * \
-                            median(speech_filter)        # nodding
+            lip_dist_data = np.append(lip_dist_data, get_lip_dist(landmarks))
 
-                        if count % NOISE_PERIOD == 0:
-                            g_noise = tuple(np.random.normal(scale=NOISE_INTENSITY[i]) for i in range(
-                                3)) if False and mouth_size > SPEECH_THRESHOLD else (0, 0, 0)
-                            # print("Adding noise")
-                    count += 1
+        rotation_mean = np.mean(rotation_data, axis=0)
+        rotation_std = np.std(rotation_data, axis=0)
 
-                    converted_rotation = tuple(rotation[i] + rotation_offset[i] + g_noise[i] * (
-                        (count % NOISE_PERIOD) + 1) / NOISE_PERIOD for i in range(3))
-                    tilt, pan = converted_rotation[0], converted_rotation[1]
+        lip_dist_mean = np.mean(lip_dist_data)
+        lip_dist_std = np.std(lip_dist_data)
 
-                    # print('timestamp:{3}\npitch:{0}\nyaw:{1}\nroll{2}\n'.format(*converted_rotation, cap.get(cv2.CAP_PROP_POS_MSEC)))
-                    time = cap.get(cv2.CAP_PROP_POS_MSEC)
-                    # file.write('{0},{1},{2},0,0\n'.format(int(time), jbr(tilt)[0], jbr(pan)[0]))
-                    file.write('{0},{1},{2},90,90\n'.format(
-                        int(time), tilt[0], pan[0]))
+    print(
+        f"Calibrated Rotation:\nMean: {rotation_mean} Std: {rotation_std}")
+    print(
+        f"Calibrated Lip Dist:\nMean: {lip_dist_mean} Std: {lip_dist_std}")
 
-                    completion = int(round(time / video_length * 100))
-                    print(video_length)
-                    print(time)
-                    print(f'{completion}% done')
+    with open(video_data_file) as mvid_file:
+        mvid_reader = csv.DictReader(mvid_file)
 
-                    rotate_marble(round(float(tilt)), round(float(pan)))
-            else:
-                print('Failed to find image points')
+        shifted_rotation_data = np.empty(shape=(0, 3))
+        for row in mvid_reader:
+            timestamp, rotation, position, landmarks = parse_row(row)
 
-            cv2.imshow(WINDOW_TITLE, frame)
-            if cv2.waitKey(1) & 0xFF == 27:     # 27 is ASCII for the Esc key on a keyboard
-                break
+            shifted_rotation = rotation - rotation_mean
 
-            pygame.display.flip()
-            pygame.time.wait(10)
+            shifted_rotation_data = np.vstack(
+                (shifted_rotation_data, shifted_rotation))
+
+            filtered_rotation = ewma(
+                shifted_rotation_data, ROTATION_FILTER_LENGTH)
+            print(
+                f"Rotation: {shifted_rotation}\nFiltered: {filtered_rotation}\n")
+
+    #                     mouth_size = get_lip_dist(landmarks) - SPEECH_OFFSET
+    #                     mouth_size = mouth_size if abs(
+    #                         mouth_size) > SPEECH_THRESHOLD else 0
+    #                     # print(f"Mouth size: {mouth_size}")
+    #                     speech_filter.append(mouth_size)
+    #                     speech_filter.pop(0)
+    #                     rotation[0] += K_SPEECH * \
+    #                         median(speech_filter)        # nodding
+
+    #                     if count % NOISE_PERIOD == 0:
+    #                         g_noise = tuple(np.random.normal(scale=NOISE_INTENSITY[i]) for i in range(
+    #                             3)) if False and mouth_size > SPEECH_THRESHOLD else (0, 0, 0)
+    #                         # print("Adding noise")
+    #                 count += 1
+
+    #                 converted_rotation = tuple(rotation[i] + rotation_offset[i] + g_noise[i] * (
+    #                     (count % NOISE_PERIOD) + 1) / NOISE_PERIOD for i in range(3))
+    #                 tilt, pan = converted_rotation[0], converted_rotation[1]
+
+    #                 # print('timestamp:{3}\npitch:{0}\nyaw:{1}\nroll{2}\n'.format(*converted_rotation, cap.get(cv2.CAP_PROP_POS_MSEC)))
+    #                 time = cap.get(cv2.CAP_PROP_POS_MSEC)
+    #                 # file.write('{0},{1},{2},0,0\n'.format(int(time), jbr(tilt)[0], jbr(pan)[0]))
+    #                 file.write('{0},{1},{2},90,90\n'.format(
+    #                     int(time), tilt[0], pan[0]))
+
+    #                 completion = int(round(time / video_length * 100))
+    #                 print(video_length)
+    #                 print(time)
+    #                 print(f'{completion}% done')
+
+    #                 rotate_marble(round(float(tilt)), round(float(pan)))
+    #         else:
+    #             print('Failed to find image points')
+
+    #         cv2.imshow(WINDOW_TITLE, frame)
+    #         if cv2.waitKey(1) & 0xFF == 27:     # 27 is ASCII for the Esc key on a keyboard
+    #             break
+
+    #         pygame.display.flip()
+    #         pygame.time.wait(10)
 
 
 if __name__ == '__main__':

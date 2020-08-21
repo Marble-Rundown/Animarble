@@ -114,7 +114,7 @@ def main():
         while cap.isOpened():
             s, frame = cap.read()
             if not(s):
-                print("Failed to read frame!")
+                print("No more frames!")
                 break
 
             timestamp = int(cap.get(cv2.CAP_PROP_POS_MSEC))
