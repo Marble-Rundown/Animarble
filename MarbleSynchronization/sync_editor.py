@@ -1,29 +1,9 @@
-# import numpy as np
-# import matplotlib.pyplot as plot
-# import wave
-# import sys
-
-# spf = wave.open("wavfile.wav", "r")
-
-# signal = spf.readframes(-1)
-# signal = np.fromstring(signal, "Int16")
-
-
-# # if spf.getnchannels() == 2:
-# #     print("Only mono channel files are allowed")
-# #     sys.exit(0)
-
-# plot.figure(1)
-# plot.title("Signal Wave...")
-# plot.plot(signal)
-# plot.show()
-
 import pygame, csv
+import numpy as np
 from threading import Thread
 from pygame.locals import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
-from mlib import *
 from objloader import *
 
 
@@ -31,15 +11,13 @@ from objloader import *
 #         Constants         #
 #############################
 FRAME_RATE = 100
+MARBLE_OFFSET = 20
 
 
 #############################
 #      Initialization       #
 #############################
 frame_time = int(round(1 / FRAME_RATE * 1000))
-
-marble = OBJ('MarbleHeadset_v11.obj')
-marble.generate()
 
 pygame.init()
 display = (800, 600)
@@ -53,14 +31,21 @@ glEnable(GL_LIGHT0)
 glEnable(GL_LIGHTING)
 glEnable(GL_COLOR_MATERIAL)
 glEnable(GL_DEPTH_TEST)
-glMatrixMode(GL_MODELVIEW)
-glShadeModel(GL_SMOOTH)
+glShadeModel(GL_SMOOTH) 
 
-gluPerspective(45, (display[0]/display[1]), 0.1, 50.0)
-# glOrtho(-50.0, 50.0, -50.0, 50.0, 0.1, 50.0)
-# glOrtho(0.0f, display[0], display[1], 0.0f, 0.0f, 1.0f)
-glTranslatef(0.0, 0.0, -20)
-glRotatef(0, 0, 0, 0)
+marble = OBJ('MarbleHeadset_v11.obj', swapyz=True)
+marble.generate()
+
+glMatrixMode(GL_PROJECTION)
+glLoadIdentity()
+width, height = display
+# gluPerspective(90.0, width/float(height), 1, 100.0)
+glOrtho(-display[0] / 15, display[0]/ 15, -display[1] / 15, display[1] / 15, 0.1, 40.0)
+glEnable(GL_DEPTH_TEST)
+glMatrixMode(GL_MODELVIEW)
+
+glTranslatef(0.0, 0.0, -30)
+glRotatef(180, 0, 1, 0)
 
 
 #############################
@@ -81,7 +66,9 @@ def main():
             if 'timestamp' not in row:
                 right_data.append([float(x) for x in row])
     
-    
+    # max_timestamp = max(left_data[-1][0], right_data[-1][0])
+    # x_vals = [50 * i for i in range(max_timestamp / )]
+
 
     left_prev, left_curr = (0, 0), (0, 0)
     right_prev, right_curr = (0, 0), (0, 0)
@@ -93,8 +80,6 @@ def main():
                 quit()
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-        
-        marble.render()
 
         if time > left_data[0][0]:
             print(left_data[0][1], left_data[0][2])
@@ -117,6 +102,37 @@ def main():
         pygame.display.flip()
         pygame.time.wait(frame_time)
         time += frame_time
+
+
+#############################
+#        Functions          #
+#############################
+def rotate_marble(side, x, y):
+    glPushMatrix()
+    glTranslatef(side * 20, 0, 0)
+    glRotatef(x, 1, 0, 0)
+    glRotatef(y, 0, -1, 0)
+    # glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+    # draw_sphere()
+    # draw_cylinder()
+    marble.render()
+    glPopMatrix()
+
+def rotate_marbles(left_x, left_y, right_x, right_y):
+    glPushMatrix()
+    glTranslatef(-MARBLE_OFFSET, 0, 0)
+    glRotatef(left_x, 1, 0, 0)
+    glRotatef(left_y, 0, -1, 0)
+    marble.render()
+    glPopMatrix()
+
+    glPushMatrix()
+    glTranslatef(MARBLE_OFFSET, 0, 0)
+    glRotatef(right_x, 1, 0, 0)
+    glRotatef(right_y, 0, -1, 0)
+    marble.render()
+    glPopMatrix()
+
 
 if __name__ == '__main__':
     main()
