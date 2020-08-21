@@ -2,6 +2,7 @@
 This program processes a .mvid file and creates a .mdat file with single-marble pan-tilt angles
 '''
 
+import time
 import csv
 import os
 import argparse
@@ -42,11 +43,11 @@ output_filename = args.output if args.output is not None else create_unique_file
     f"outputs/ModelTranslator/{os.path.splitext(os.path.basename(video_data_file))[0]}.mdat")
 
 ''' Constants '''
-ROTATION_FILTER_LENGTH = 1
+ROTATION_FILTER_LENGTH = 5
 
 LIP_DIST_FILTER_LENGTH = 5
 LIP_DIST_MINIMUM_THRESHOLD = 10
-LIP_DIST_MULTIPLIER = 0.0
+LIP_DIST_MULTIPLIER = 0.5
 
 DEFAULT_PAN_SETPOINT = 90
 DEFAULT_TILT_SETPOINT = 90
@@ -120,13 +121,15 @@ def ewma(data, filter_length=None):
 
 def rotate_marble(pan, tilt):
     glPushMatrix()
-    glRotatef(pan, 1, 0, 0)
-    glRotatef(tilt, 0, -1, 0)
+    glRotatef(tilt, -1, 0, 0)
+    glRotatef(pan, 0, -1, 0)
     marble.render()
     glPopMatrix()
 
 
 def main():
+    print("Starting processing...")
+    start_time = time.time()
 
     # Calibration constants for consistent face detection
     rotation_mean, rotation_std = None, None
@@ -164,75 +167,93 @@ def main():
         cap = cv2.VideoCapture(raw_mp4_file)
         assert cap.isOpened(), 'Failed to open video file'
 
-    with open(video_data_file) as mvid_file:
-        mvid_reader = csv.DictReader(mvid_file)
+    with open(output_filename, "w+") as mdat_file:
+        fieldnames = ["timestamp", "pan_offset",
+                      "tilt_offset", "pan_setpoint", "tilt_setpoint"]
+        mdat_writer = csv.DictWriter(mdat_file, fieldnames=fieldnames)
 
-        shifted_rotation_data = np.empty(shape=(0, 3))
-        shifted_lip_dist_data = np.empty(shape=0)
+        mdat_writer.writeheader()
 
-        simulation_time = 0
-        for row in mvid_reader:
+        with open(video_data_file) as mvid_file:
+            mvid_reader = csv.DictReader(mvid_file)
 
-            # If animation is enabled, check for pygame updates and re-render display
-            if should_animate:
-                # 27 is ASCII for the Esc key on a keyboard
-                if cv2.waitKey(1) & 0xFF == 27:
-                    pygame.quit()
-                    quit()
-                for event in pygame.event.get():
-                    if event.type == pygame.QUIT:
+            shifted_rotation_data = np.empty(shape=(0, 3))
+            shifted_lip_dist_data = np.empty(shape=0)
+
+            simulation_time = 0
+            for row in mvid_reader:
+
+                # If animation is enabled, check for pygame updates and re-render display
+                if should_animate:
+                    # 27 is ASCII for the Esc key on a keyboard
+                    if cv2.waitKey(1) & 0xFF == 27:
                         pygame.quit()
                         quit()
+                    for event in pygame.event.get():
+                        if event.type == pygame.QUIT:
+                            pygame.quit()
+                            quit()
 
-                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+                    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
-            timestamp, rotation, position, landmarks = parse_row(row)
+                timestamp, rotation, position, landmarks = parse_row(row)
 
-            shifted_rotation = rotation - rotation_mean
-            shifted_rotation_data = np.vstack(
-                (shifted_rotation_data, shifted_rotation))
-            filtered_rotation = ewma(
-                shifted_rotation_data, ROTATION_FILTER_LENGTH)
+                shifted_rotation = rotation - rotation_mean
+                shifted_rotation_data = np.vstack(
+                    (shifted_rotation_data, shifted_rotation))
+                filtered_rotation = ewma(
+                    shifted_rotation_data, ROTATION_FILTER_LENGTH)
 
-            shifted_lip_dist = get_lip_dist(landmarks) - lip_dist_mean
+                shifted_lip_dist = get_lip_dist(landmarks) - lip_dist_mean
 
-            thresholded_lip_dist = shifted_lip_dist if abs(
-                shifted_lip_dist) > LIP_DIST_MINIMUM_THRESHOLD else 0
+                thresholded_lip_dist = shifted_lip_dist if abs(
+                    shifted_lip_dist) > LIP_DIST_MINIMUM_THRESHOLD else 0
 
-            shifted_lip_dist_data = np.append(
-                shifted_lip_dist_data, thresholded_lip_dist)
-            filtered_lip_dist = ewma(
-                shifted_lip_dist_data, LIP_DIST_FILTER_LENGTH)
+                shifted_lip_dist_data = np.append(
+                    shifted_lip_dist_data, thresholded_lip_dist)
+                filtered_lip_dist = ewma(
+                    shifted_lip_dist_data, LIP_DIST_FILTER_LENGTH)
 
-            mouth_offset = LIP_DIST_MULTIPLIER * filtered_lip_dist
+                mouth_offset = LIP_DIST_MULTIPLIER * filtered_lip_dist
 
-            print(f"Mouth size: {mouth_offset}")
+                print(f"Mouth size: {mouth_offset}")
 
-            pan_offset, tilt_offset = shifted_rotation[0,
-                                                       0], shifted_rotation[0, 1]
-            tilt_offset -= mouth_offset  # Subtract so mouth moves down while talking
+                # Rotation about Y axis is pan
+                pan_offset = shifted_rotation[0, 1]
+                # Rotation about X axis is tilt
+                tilt_offset = shifted_rotation[0, 0]
 
-            pan, tilt = pan_offset + DEFAULT_PAN_SETPOINT, tilt_offset + DEFAULT_TILT_SETPOINT
-            pan, tilt = round(pan), round(tilt)
+                tilt_offset -= mouth_offset  # Subtract so mouth moves down while talking
 
-            print(f"Pan: {pan}\t\tTilt: {tilt}")
+                pan_offset, tilt_offset = round(pan_offset), round(tilt_offset)
 
-            # If we should display vide, actually display the frame
-            if should_display:
-                s, frame = cap.read()
-                if not(s):
-                    print("Failed to read frame!")
-                    break
-                cv2.imshow(WINDOW_TITLE, frame)
+                # Write these offsets to .mdat file
+                row_dict = {
+                    "timestamp": timestamp,
+                    "pan_offset": pan_offset,
+                    "tilt_offset": tilt_offset,
+                    "pan_setpoint": DEFAULT_PAN_SETPOINT,
+                    "tilt_setpoint": DEFAULT_TILT_SETPOINT
+                }
+                mdat_writer.writerow(row_dict)
 
-            # If we should animate, actually animate the marble
-            if should_animate:
-                rotate_marble(pan_offset, tilt_offset)
-                pygame.display.flip()
-                pygame.time.wait(timestamp - simulation_time)
-                simulation_time = timestamp
+                # If we should display video, actually display the frame
+                if should_display:
+                    s, frame = cap.read()
+                    if not(s):
+                        print("Failed to read frame!")
+                        break
+                    cv2.imshow(WINDOW_TITLE, frame)
 
-    #                         median(speech_filter)        # nodding
+                # If we should animate, actually animate the marble
+                if should_animate:
+                    rotate_marble(pan_offset, tilt_offset)
+                    pygame.display.flip()
+                    pygame.time.wait(timestamp - simulation_time)
+                    simulation_time = timestamp
+
+    print(f"Time consumed: {time.time() - start_time}")
+    print(f"Model pantilt data exported to: {output_filename}")
 
 
 if __name__ == '__main__':
