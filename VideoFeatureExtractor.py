@@ -89,7 +89,7 @@ def rect_to_coor(rect):
 
 def main():
     print("Starting processing...")
-    start_time = time.process_time()
+    start_time = time.time()
 
     cap = cv2.VideoCapture(video_file)
     assert cap.isOpened(), 'Failed to open video file'
@@ -111,10 +111,11 @@ def main():
 
         mvid_writer.writeheader()
 
+        last_row_dict = None
         while cap.isOpened():
             s, frame = cap.read()
             if not(s):
-                print("Failed to read frame!")
+                print("No more frames!")
                 break
 
             timestamp = int(cap.get(cv2.CAP_PROP_POS_MSEC))
@@ -122,33 +123,37 @@ def main():
             success, labelled_frame, landmarks, pose_estimation_pts = detect(
                 frame, mark=should_display)
 
-            if not success:
-                print(f"Failed to find face at time {timestamp}")
-                continue
-
-            rescaled_frame = rescale_frame(
-                labelled_frame, VIDEO_RESCALE_FACTOR)
-
-            head_rotation, head_translation = pe.estimate_pose(
-                pose_estimation_pts)
-
             row_dict = {}
-            row_dict["timestamp"] = timestamp
-            for i, d in enumerate("xyz"):
-                row_dict[f"rot_{d}"] = head_rotation[i][0]
-                row_dict[f"pos_{d}"] = head_translation[i][0]
-            for i, l in enumerate(landmarks):
-                for j, d in enumerate("xy"):
-                    row_dict[f"landmark_{i}_{d}"] = l[j]
+            if success:
+                rescaled_frame = rescale_frame(
+                    labelled_frame, VIDEO_RESCALE_FACTOR)
+
+                head_rotation, head_translation = pe.estimate_pose(
+                    pose_estimation_pts)
+
+                row_dict["timestamp"] = timestamp
+                for i, d in enumerate("xyz"):
+                    row_dict[f"rot_{d}"] = head_rotation[i][0]
+                    row_dict[f"pos_{d}"] = head_translation[i][0]
+                for i, l in enumerate(landmarks):
+                    for j, d in enumerate("xy"):
+                        row_dict[f"landmark_{i}_{d}"] = l[j]
+            else:
+                print(f"Couldn't find face at timestamp {timestamp}")
+                row_dict = last_row_dict
 
             mvid_writer.writerow(row_dict)
+            last_row_dict = row_dict
 
             if should_display:
                 cv2.imshow(WINDOW_TITLE, frame)
             if cv2.waitKey(1) & 0xFF == 27:     # 27 is ASCII for the Esc key on a keyboard
                 break
 
-    print(f"Time consumed: {time.process_time() - start_time}")
+        cap.release()
+        cv2.destroyAllWindows()
+
+    print(f"Time consumed: {time.time() - start_time}")
     print(f"Video feature data exported to: {output_filename}")
 
 
