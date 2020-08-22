@@ -139,14 +139,14 @@ def rotate_marbles(left_pan, left_tilt, right_pan, right_tilt):
     OPENGL_TILT_OFFSET = 90
 
     glPushMatrix()
-    glTranslatef(-MARBLE_DISPLAY_X_OFFSET, 0, 0)
+    glTranslatef(MARBLE_DISPLAY_X_OFFSET, 0, 0)
     glRotatef(left_tilt - OPENGL_TILT_OFFSET, -1, 0, 0)
     glRotatef(left_pan - OPENGL_PAN_OFFSET, 0, -1, 0)
     marble.render()
     glPopMatrix()
 
     glPushMatrix()
-    glTranslatef(MARBLE_DISPLAY_X_OFFSET, 0, 0)
+    glTranslatef(-MARBLE_DISPLAY_X_OFFSET, 0, 0)
     glRotatef(right_tilt - OPENGL_TILT_OFFSET, -1, 0, 0)
     glRotatef(right_pan - OPENGL_PAN_OFFSET, 0, -1, 0)
     marble.render()
@@ -165,6 +165,9 @@ def main():
         raw_left_timestamps, raw_left_pan_offset, raw_left_tilt_offset, raw_left_pan_setpoint, raw_left_tilt_setpoint, ARDUINO_SAMPLING_INTERVAL, max_timestamp)
     right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track = resample_tracks(
         raw_right_timestamps, raw_right_pan_offset, raw_right_tilt_offset, raw_right_pan_setpoint, raw_right_tilt_setpoint, ARDUINO_SAMPLING_INTERVAL, max_timestamp)
+
+    ''' Add mock GUI actions below'''
+    ''' Add mock GUI actions above'''
 
     left_pan_angle, left_tilt_angle, right_pan_angle, right_tilt_angle = export(
         left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track)
