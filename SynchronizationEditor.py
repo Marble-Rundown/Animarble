@@ -2,11 +2,10 @@
 This program enables the synchronization of 2 .mdat files with .wav audio files to create an edited .msync file
 '''
 
-import pygame
-import os
-import argparse
-import csv
+import pygame, os, argparse, csv, wave, sys
 import numpy as np
+import matplotlib.pyplot as plt
+from  matplotlib.widgets import Button
 from pygame.locals import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -16,40 +15,152 @@ from math import ceil
 from OffsetTrack import *
 from SetpointTrack import *
 
-''' Constants '''
+
+#############################
+#         Constants         #
+#############################
+PLAYBACK_SPEED = 2
 MARBLE_DISPLAY_X_OFFSET = 20
 ARDUINO_SAMPLING_INTERVAL = 50
+
+
+#############################
+#      Initialization       #
+#############################
+initialized = False
+left_pan_offset_track = left_tilt_offset_track = left_pan_setpoint_track = left_tilt_setpoint_track = None
+right_pan_offset_track = right_tilt_offset_track = right_pan_setpoint_track = right_tilt_setpoint_track = None
 
 pygame.init()
 display = (800, 600)
 pygame.display.set_mode(display, DOUBLEBUF | OPENGL)
 
-# Initialize lighting and rendering settings
-glLightfv(GL_LIGHT0, GL_POSITION,  (-40, 200, 100, 0.0))
-glLightfv(GL_LIGHT0, GL_AMBIENT, (0.2, 0.2, 0.2, 1.0))
-glEnable(GL_LIGHT0)
-glEnable(GL_LIGHTING)
-glEnable(GL_COLOR_MATERIAL)
-glEnable(GL_DEPTH_TEST)
-glShadeModel(GL_SMOOTH)
-glMatrixMode(GL_PROJECTION)
-
 # Initialize marble OBJ
 marble = OBJ('assets/MarbleHeadset_v11.obj', swapyz=True)
 marble.generate()
 
-# Initialize camera
-glLoadIdentity()
-width, height = display
-glOrtho(-width / 15, width / 15, -
-        height / 15, height / 15, 0.1, 40.0)
-glEnable(GL_DEPTH_TEST)
-glMatrixMode(GL_MODELVIEW)
 
-glTranslatef(0.0, 0.0, -30)
-glRotatef(180, 0, 1, 0)
+#############################
+#           Main            #
+#############################
+def matplot_main():
+    global initialized
+    global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
+    if not initialized:
+        raw_left_timestamps, raw_left_pan_offset, raw_left_tilt_offset, raw_left_pan_setpoint, raw_left_tilt_setpoint = parse_mdat_file(left_mdat_file)
+        raw_right_timestamps, raw_right_pan_offset, raw_right_tilt_offset, raw_right_pan_setpoint, raw_right_tilt_setpoint = parse_mdat_file(right_mdat_file)
+
+        max_timestamp = max(raw_left_timestamps[-1], raw_right_timestamps[-1])
+
+        left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track = resample_tracks(
+            raw_left_timestamps, raw_left_pan_offset, raw_left_tilt_offset, raw_left_pan_setpoint, raw_left_tilt_setpoint, ARDUINO_SAMPLING_INTERVAL, max_timestamp)
+        right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track = resample_tracks(
+            raw_right_timestamps, raw_right_pan_offset, raw_right_tilt_offset, raw_right_pan_setpoint, raw_right_tilt_setpoint, ARDUINO_SAMPLING_INTERVAL, max_timestamp)
+
+        initialized = True
+
+    spf = wave.open('assets/wavfile.wav', 'r')
+
+    signal = spf.readframes(-1)
+    signal = np.fromstring(signal, "Int16")
+
+    
+    # plt.ion()
+    plt.figure(1)
+
+    plt.subplot(9, 9, (1, 9))
+    plt.title('left pan offsets')
+    plt.plot(left_pan_offset_track.apply_modifiers(), color='blue')
+    plt.subplot(9, 9, (10, 18))
+    plt.title('left tilt offsets')
+    plt.plot(left_tilt_offset_track.apply_modifiers(), color='blue')
+    plt.subplot(9, 9, (19, 27))
+    plt.title('left pan setpoints')
+    plt.plot(left_pan_setpoint_track.apply_control_points(), color='blue')
+    plt.subplot(9, 9, (28, 36))
+    plt.title('left audio waveform')
+    plt.plot(signal, color='blue')
+
+    plt.subplot(9, 9, (46, 54))
+    plt.title('right pan offsets')
+    plt.plot(right_pan_offset_track.apply_modifiers(), color='red')
+    plt.subplot(9, 9, (55, 63))
+    plt.title('right tilt offsets')
+    plt.plot(right_tilt_offset_track.apply_modifiers(), color='red')
+    plt.subplot(9, 9, (64, 72))
+    plt.title('right pan setpoints')
+    plt.plot(right_pan_setpoint_track.apply_control_points(), color='red')
+    plt.subplot(9, 9, (73, 81))
+    plt.title('right audio waveform')
+    plt.plot(signal, color='red')
+
+    b_playback = Button(plt.axes([0.7, 0.05, 0.1, 0.075]), 'Playback')
+    b_playback.on_clicked(playback)
+    # plt.pause(0.1)
+    plt.show()
+
+def pygame_main():
+    pygame.init()
+    display = (800, 600)
+    pygame.display.set_mode(display, DOUBLEBUF | OPENGL)
+
+    glLightfv(GL_LIGHT0, GL_POSITION,  (-40, 200, 100, 0.0))
+    glLightfv(GL_LIGHT0, GL_AMBIENT, (0.2, 0.2, 0.2, 1.0))
+    glEnable(GL_LIGHT0)
+    glEnable(GL_LIGHTING)
+    glEnable(GL_COLOR_MATERIAL)
+    glEnable(GL_DEPTH_TEST)
+    glShadeModel(GL_SMOOTH)
+    glMatrixMode(GL_PROJECTION)
+
+    # Initialize marble OBJ
+    marble = OBJ('assets/MarbleHeadset_v11.obj', swapyz=True)
+    marble.generate()
+
+    # Initialize camera
+    glLoadIdentity()
+    width, height = display
+    glOrtho(-width / 15, width / 15, -height / 15, height / 15, 0.1, 40.0)
+    glEnable(GL_DEPTH_TEST)
+    glMatrixMode(GL_MODELVIEW)
+
+    glTranslatef(0.0, 0.0, -30)
+    glRotatef(180, 0, 1, 0)
+
+    # raw_left_timestamps, raw_left_pan_offset, raw_left_tilt_offset, raw_left_pan_setpoint, raw_left_tilt_setpoint = parse_mdat_file(
+    #     left_mdat_file)
+    # raw_right_timestamps, raw_right_pan_offset, raw_right_tilt_offset, raw_right_pan_setpoint, raw_right_tilt_setpoint = parse_mdat_file(
+    #     right_mdat_file)
+
+    # max_timestamp = max(raw_left_timestamps[-1], raw_right_timestamps[-1])
+
+    # left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track = resample_tracks(
+    #     raw_left_timestamps, raw_left_pan_offset, raw_left_tilt_offset, raw_left_pan_setpoint, raw_left_tilt_setpoint, ARDUINO_SAMPLING_INTERVAL, max_timestamp)
+    # right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track = resample_tracks(
+    #     raw_right_timestamps, raw_right_pan_offset, raw_right_tilt_offset, raw_right_pan_setpoint, raw_right_tilt_setpoint, ARDUINO_SAMPLING_INTERVAL, max_timestamp)
+
+    left_pan_angle, left_tilt_angle, right_pan_angle, right_tilt_angle = export(
+        left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track)
+
+    for left_pan, left_tilt, right_pan, right_tilt in zip(left_pan_angle, left_tilt_angle, right_pan_angle, right_tilt_angle):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                return
+
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+        rotate_marbles(left_pan, left_tilt, right_pan, right_tilt)
+
+        pygame.display.flip()
+        pygame.time.wait(int(round(ARDUINO_SAMPLING_INTERVAL / PLAYBACK_SPEED)))
+    pygame.quit()
+    return
 
 
+#############################
+#        Functions          #
+#############################
 def parse_row(row):
     timestamp = int(row["timestamp"])
 
@@ -59,7 +170,6 @@ def parse_row(row):
         row["tilt_offset"]), int(row["tilt_setpoint"])
 
     return timestamp, pan_offset, tilt_offset, pan_setpoint, tilt_setpoint
-
 
 def parse_mdat_file(mdat_file):
     raw_timestamps = np.empty(0)
@@ -84,7 +194,6 @@ def parse_mdat_file(mdat_file):
                 raw_tilt_setpoint, tilt_setpoint)
 
     return raw_timestamps, raw_pan_offset, raw_tilt_offset, raw_pan_setpoint, raw_tilt_setpoint
-
 
 def resample_tracks(raw_timestamps, raw_pan_offset, raw_tilt_offset, raw_pan_setpoint, raw_tilt_setpoint, sampling_interval, max_timestamp):
     interp_pan_offset = interp1d(
@@ -113,13 +222,11 @@ def resample_tracks(raw_timestamps, raw_pan_offset, raw_tilt_offset, raw_pan_set
 
     return OffsetTrack(resampled_pan_offset), OffsetTrack(resampled_tilt_offset), SetpointTrack(resampled_pan_setpoint), SetpointTrack(resampled_tilt_setpoint)
 
-
 def get_angled(offset_track, setpoint_track):
     modified_offset_track = offset_track.apply_modifiers()
     modified_control_points = setpoint_track.apply_control_points()
     angle = modified_offset_track + modified_control_points
     return angle
-
 
 def export(left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track):
     left_pan_angle = get_angled(left_pan_offset_track, left_pan_setpoint_track)
@@ -132,7 +239,6 @@ def export(left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_trac
         right_tilt_offset_track, right_tilt_setpoint_track)
 
     return left_pan_angle, left_tilt_angle, right_pan_angle, right_tilt_angle
-
 
 def rotate_marbles(left_pan, left_tilt, right_pan, right_tilt):
     OPENGL_PAN_OFFSET = 90
@@ -152,36 +258,14 @@ def rotate_marbles(left_pan, left_tilt, right_pan, right_tilt):
     marble.render()
     glPopMatrix()
 
+def playback(event):
+    plt.close('all')
+    pygame_main()
+    matplot_main()
 
-def main():
-    raw_left_timestamps, raw_left_pan_offset, raw_left_tilt_offset, raw_left_pan_setpoint, raw_left_tilt_setpoint = parse_mdat_file(
-        left_mdat_file)
-    raw_right_timestamps, raw_right_pan_offset, raw_right_tilt_offset, raw_right_pan_setpoint, raw_right_tilt_setpoint = parse_mdat_file(
-        right_mdat_file)
-
-    max_timestamp = max(raw_left_timestamps[-1], raw_right_timestamps[-1])
-
-    left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track = resample_tracks(
-        raw_left_timestamps, raw_left_pan_offset, raw_left_tilt_offset, raw_left_pan_setpoint, raw_left_tilt_setpoint, ARDUINO_SAMPLING_INTERVAL, max_timestamp)
-    right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track = resample_tracks(
-        raw_right_timestamps, raw_right_pan_offset, raw_right_tilt_offset, raw_right_pan_setpoint, raw_right_tilt_setpoint, ARDUINO_SAMPLING_INTERVAL, max_timestamp)
-
-    left_pan_angle, left_tilt_angle, right_pan_angle, right_tilt_angle = export(
-        left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track)
-
-    for left_pan, left_tilt, right_pan, right_tilt in zip(left_pan_angle, left_tilt_angle, right_pan_angle, right_tilt_angle):
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                quit()
-
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-
-        rotate_marbles(left_pan, left_tilt, right_pan, right_tilt)
-
-        pygame.display.flip()
-        pygame.time.wait(ARDUINO_SAMPLING_INTERVAL)
-
+def generate_plots():
+    global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
+    
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(
@@ -197,4 +281,4 @@ if __name__ == '__main__':
     left_mdat_file = args.left
     right_mdat_file = args.right
 
-    main()
+    matplot_main()

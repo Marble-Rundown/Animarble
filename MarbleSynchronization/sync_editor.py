@@ -1,5 +1,6 @@
-import pygame, csv
+import pygame, csv, wave, sys
 import numpy as np
+import matplotlib.pyplot as plt
 from threading import Thread
 from pygame.locals import *
 from OpenGL.GL import *
@@ -21,6 +22,7 @@ ARDUINO_INTERVAL = 50
 #############################
 frame_time = int(round(1 / FRAME_RATE * 1000))
 
+# Pygame and openGL marble rendering
 pygame.init()
 display = (800, 600)
 pygame.display.set_mode(display, DOUBLEBUF | OPENGL)
@@ -47,6 +49,23 @@ glMatrixMode(GL_MODELVIEW)
 
 glTranslatef(0.0, 0.0, -30)
 glRotatef(180, 0, 1, 0)
+
+
+# Matplotlib .wav audio
+spf = wave.open("wavfile.wav", "r")
+
+signal = spf.readframes(-1)
+signal = np.fromstring(signal, "Int16")
+
+if spf.getnchannels() == 2:
+    print("Just mono files")
+    sys.exit(0)
+
+plt.figure(1)
+plt.plot(signal)
+plt.figure(1)
+plt.plot(signal)
+plt.show()
 
 
 #############################
@@ -109,17 +128,6 @@ def create_file(file_name, file_type, n=0):
         return open(destination, 'w+')
     else:
         return create_file(file_name, file_type, n+1)
-
-def rotate_marble(side, x, y):
-    glPushMatrix()
-    glTranslatef(side * 20, 0, 0)
-    glRotatef(x, 1, 0, 0)
-    glRotatef(y, 0, -1, 0)
-    # glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-    # draw_sphere()
-    # draw_cylinder()
-    marble.render()
-    glPopMatrix()
 
 def rotate_marbles(left_x, left_y, right_x, right_y):
     glPushMatrix()
