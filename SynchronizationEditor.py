@@ -5,7 +5,7 @@ This program enables the synchronization of 2 .mdat files with .wav audio files 
 import pygame, os, argparse, csv, wave, sys
 import numpy as np
 import matplotlib.pyplot as plt
-from  matplotlib.widgets import Button
+from  matplotlib.widgets import Button, TextBox
 from pygame.locals import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -20,6 +20,7 @@ from SetpointTrack import *
 #         Constants         #
 #############################
 PLAYBACK_SPEED = 2
+START_TIMESTAMP = 0
 MARBLE_DISPLAY_X_OFFSET = 20
 ARDUINO_SAMPLING_INTERVAL = 50
 
@@ -38,6 +39,31 @@ pygame.display.set_mode(display, DOUBLEBUF | OPENGL)
 # Initialize marble OBJ
 marble = OBJ('assets/MarbleHeadset_v11.obj', swapyz=True)
 marble.generate()
+
+
+
+
+
+
+
+
+
+
+
+def workspace():
+    global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
+    ########################################
+    #           EDIT ME HERE!!!            #
+    ########################################
+    
+
+
+
+
+
+
+
+
 
 
 #############################
@@ -64,7 +90,7 @@ def matplot_main():
     signal = spf.readframes(-1)
     signal = np.fromstring(signal, "Int16")
 
-    
+    workspace()
     # plt.ion()
     plt.figure(1)
 
@@ -94,8 +120,20 @@ def matplot_main():
     plt.title('right audio waveform')
     plt.plot(signal, color='red')
 
-    b_playback = Button(plt.axes([0.7, 0.05, 0.1, 0.075]), 'Playback')
-    b_playback.on_clicked(playback)
+    seek = TextBox(plt.axes([0.1, 0.05, 0.1, 0.050]), 'Seek (ms)', initial='0')
+    seek.on_submit(submit)
+    b_playback_half = Button(plt.axes([0.4, 0.05, 0.1, 0.050]), '0.5x')
+    b_playback_half.on_clicked(lambda e: playback(e, 0.5))
+    b_playback_1 = Button(plt.axes([0.5, 0.05, 0.1, 0.050]), '1x')
+    b_playback_1.on_clicked(lambda e: playback(e, 1))
+    b_playback_2 = Button(plt.axes([0.6, 0.05, 0.1, 0.050]), '2x')
+    b_playback_2.on_clicked(lambda e: playback(e, 2))
+    b_playback_3 = Button(plt.axes([0.7, 0.05, 0.1, 0.050]), '3x')
+    b_playback_3.on_clicked(lambda e: playback(e, 3))
+    b_playback_4 = Button(plt.axes([0.8, 0.05, 0.1, 0.050]), '4x')
+    b_playback_4.on_clicked(lambda e: playback(e, 4))
+    b_playback_10 = Button(plt.axes([0.9, 0.05, 0.1, 0.050]), '10x')
+    b_playback_10.on_clicked(lambda e: playback(e, 10))
     # plt.pause(0.1)
     plt.show()
 
@@ -127,20 +165,16 @@ def pygame_main():
     glTranslatef(0.0, 0.0, -30)
     glRotatef(180, 0, 1, 0)
 
-    # raw_left_timestamps, raw_left_pan_offset, raw_left_tilt_offset, raw_left_pan_setpoint, raw_left_tilt_setpoint = parse_mdat_file(
-    #     left_mdat_file)
-    # raw_right_timestamps, raw_right_pan_offset, raw_right_tilt_offset, raw_right_pan_setpoint, raw_right_tilt_setpoint = parse_mdat_file(
-    #     right_mdat_file)
-
-    # max_timestamp = max(raw_left_timestamps[-1], raw_right_timestamps[-1])
-
-    # left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track = resample_tracks(
-    #     raw_left_timestamps, raw_left_pan_offset, raw_left_tilt_offset, raw_left_pan_setpoint, raw_left_tilt_setpoint, ARDUINO_SAMPLING_INTERVAL, max_timestamp)
-    # right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track = resample_tracks(
-    #     raw_right_timestamps, raw_right_pan_offset, raw_right_tilt_offset, raw_right_pan_setpoint, raw_right_tilt_setpoint, ARDUINO_SAMPLING_INTERVAL, max_timestamp)
-
     left_pan_angle, left_tilt_angle, right_pan_angle, right_tilt_angle = export(
         left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track)
+
+
+    ##############################################################
+    #           Need find way to access timestamps          #
+    ###########################################################
+    start_index = int(round(START_TIMESTAMP / ARDUINO_SAMPLING_INTERVAL))
+    print(left_pan_angle)
+
 
     for left_pan, left_tilt, right_pan, right_tilt in zip(left_pan_angle, left_tilt_angle, right_pan_angle, right_tilt_angle):
         for event in pygame.event.get():
@@ -258,13 +292,20 @@ def rotate_marbles(left_pan, left_tilt, right_pan, right_tilt):
     marble.render()
     glPopMatrix()
 
-def playback(event):
+def playback(event, speed):
+    global PLAYBACK_SPEED
+    PLAYBACK_SPEED = speed
     plt.close('all')
     pygame_main()
     matplot_main()
 
-def generate_plots():
-    global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
+def submit(event, user_input):
+    try:
+        user_input = int(user_input)
+    except:
+        print("Please enter a integer value")
+        return
+    START_TIMESTAMP = user_input
     
 
 if __name__ == '__main__':
