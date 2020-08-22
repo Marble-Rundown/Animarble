@@ -21,6 +21,7 @@ from SetpointTrack import *
 #############################
 PLAYBACK_SPEED = 2
 START_TIMESTAMP = 0
+END_TIMESTAMP = 0
 MARBLE_DISPLAY_X_OFFSET = 20
 ARDUINO_SAMPLING_INTERVAL = 50
 
@@ -120,8 +121,11 @@ def matplot_main():
     plt.title('right audio waveform')
     plt.plot(signal, color='red')
 
-    seek = TextBox(plt.axes([0.1, 0.05, 0.1, 0.050]), 'Seek (ms)', initial='0')
-    seek.on_submit(submit)
+    seek_start = TextBox(plt.axes([0.1, 0.05, 0.1, 0.050]), 'start', initial='0')
+    seek_start.on_submit(lambda e, i: submit(e, i, True))
+    seek_end = TextBox(plt.axes([0.2, 0.05, 0.1, 0.050]), 'start', initial='0')
+    seek_end.on_submit(lambda e, i: submit(e, i, False))
+
     b_playback_half = Button(plt.axes([0.4, 0.05, 0.1, 0.050]), '0.5x')
     b_playback_half.on_clicked(lambda e: playback(e, 0.5))
     b_playback_1 = Button(plt.axes([0.5, 0.05, 0.1, 0.050]), '1x')
@@ -132,8 +136,8 @@ def matplot_main():
     b_playback_3.on_clicked(lambda e: playback(e, 3))
     b_playback_4 = Button(plt.axes([0.8, 0.05, 0.1, 0.050]), '4x')
     b_playback_4.on_clicked(lambda e: playback(e, 4))
-    b_playback_10 = Button(plt.axes([0.9, 0.05, 0.1, 0.050]), '10x')
-    b_playback_10.on_clicked(lambda e: playback(e, 10))
+    b_playback_10 = Button(plt.axes([0.9, 0.05, 0.1, 0.050]), 'exp')
+    b_playback_10.on_clicked(to_msync)
     # plt.pause(0.1)
     plt.show()
 
@@ -169,14 +173,15 @@ def pygame_main():
         left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track)
 
 
-    ##############################################################
-    #           Need find way to access timestamps          #
-    ###########################################################
     start_index = int(round(START_TIMESTAMP / ARDUINO_SAMPLING_INTERVAL))
-    print(left_pan_angle)
+    end_index = int(round(END_TIMESTAMP / ARDUINO_SAMPLING_INTERVAL)) if END_TIMESTAMP != 0 else len(left_pan_angle) - 1
+    # print(start_index, end_index)
+    # start_index = 50
+    # print(left_pan_angle)
 
 
     for left_pan, left_tilt, right_pan, right_tilt in zip(left_pan_angle, left_tilt_angle, right_pan_angle, right_tilt_angle):
+    # for i in range(start_index, len(left_pan_angle)):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -195,6 +200,13 @@ def pygame_main():
 #############################
 #        Functions          #
 #############################
+def create_file(file_name, file_type, n=0):
+    destination = './outputs/{0}{1}.{2}'.format(file_name, f'({n})', file_type)       # Add:    if n != 0 else ''    after f' ({n})' if you don't want the first file to have a number
+    if not os.path.isfile(destination):
+        return open(destination, 'w+')
+    else:
+        return create_file(file_name, file_type, n+1)
+
 def parse_row(row):
     timestamp = int(row["timestamp"])
 
@@ -299,14 +311,29 @@ def playback(event, speed):
     pygame_main()
     matplot_main()
 
-def submit(event, user_input):
+def submit(event, user_input, start):
+    global START_TIMESTAMP, END_TIMESTAMP
     try:
         user_input = int(user_input)
     except:
         print("Please enter a integer value")
         return
-    START_TIMESTAMP = user_input
+    if start:
+        START_TIMESTAMP = user_input
+    else:
+        END_TIMESTAMP = user_input
+
+def to_msync(event):
+    global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
     
+    left_pan_angle, left_tilt_angle, right_pan_angle, right_tilt_angle = export(
+        left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track)
+
+    with create_file('output', 'msync') as output_file:
+        print('timestamp,left_pan,left_tilt,right_pan,right_tilt', file=output_file)
+        for i in range(len(left_pan_angle)):
+            print(f'{i * ARDUINO_SAMPLING_INTERVAL},{int(round(left_pan_angle[i]))},{int(round(left_tilt_angle[i]))},{int(round(right_pan_angle[i]))},{int(round(right_tilt_angle[i]))}', file=output_file)
+        
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(
