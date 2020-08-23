@@ -44,6 +44,8 @@ def main():
         with open(msync_file) as input_file:
             msync_reader = csv.DictReader(input_file)
             for i, row in enumerate(msync_reader):
+                if (i % 2 == 1):
+                    continue
 
                 # Include comment indicating which row the command was generated from
                 print(f"\t// Row {i}", file=output_file)
