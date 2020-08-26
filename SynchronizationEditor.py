@@ -28,6 +28,7 @@ from utils import create_unique_filename
 #############################
 PLAYBACK_SPEED = 2
 START_TIMESTAMP = 0
+END_TIMESTAMP = 0
 MARBLE_DISPLAY_X_OFFSET = 20
 ARDUINO_SAMPLING_INTERVAL = 50
 
@@ -211,8 +212,12 @@ def matplot_main():
     plt.title('right audio waveform')
     plt.plot(signal, color='red')
 
-    seek = TextBox(plt.axes([0.1, 0.05, 0.1, 0.050]), 'Seek (ms)', initial='0')
-    seek.on_submit(submit)
+    seek_start = TextBox(
+        plt.axes([0.1, 0.05, 0.1, 0.050]), 'start', initial='0')
+    seek_start.on_submit(lambda e, i: submit(e, i, True))
+    seek_end = TextBox(plt.axes([0.2, 0.05, 0.1, 0.050]), 'end', initial='0')
+    seek_end.on_submit(lambda e, i: submit(e, i, False))
+
     b_playback_half = Button(plt.axes([0.4, 0.05, 0.1, 0.050]), '0.5x')
     b_playback_half.on_clicked(lambda e: playback(e, 0.5))
     b_playback_1 = Button(plt.axes([0.5, 0.05, 0.1, 0.050]), '1x')
@@ -261,13 +266,15 @@ def pygame_main():
     left_pan_angle, left_tilt_angle, right_pan_angle, right_tilt_angle = export(
         left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track)
 
-    ##############################################################
-    #           Need find way to access timestamps          #
-    ###########################################################
     start_index = int(round(START_TIMESTAMP / ARDUINO_SAMPLING_INTERVAL))
-    print(left_pan_angle)
+    end_index = int(round(END_TIMESTAMP / ARDUINO_SAMPLING_INTERVAL)
+                    ) if END_TIMESTAMP != 0 else len(left_pan_angle) - 1
+    # print(start_index, end_index)
+    # start_index = 50
+    # print(left_pan_angle)
 
     for left_pan, left_tilt, right_pan, right_tilt in zip(left_pan_angle, left_tilt_angle, right_pan_angle, right_tilt_angle):
+        # for i in range(start_index, len(left_pan_angle)):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -288,6 +295,15 @@ def pygame_main():
 #############################
 #        Functions          #
 #############################
+def create_file(file_name, file_type, n=0):
+    # Add:    if n != 0 else ''    after f' ({n})' if you don't want the first file to have a number
+    destination = './outputs/{0}{1}.{2}'.format(file_name, f'({n})', file_type)
+    if not os.path.isfile(destination):
+        return open(destination, 'w+')
+    else:
+        return create_file(file_name, file_type, n+1)
+
+
 def parse_row(row):
     timestamp = int(row["timestamp"])
 
@@ -433,13 +449,17 @@ def playback(event, speed):
     matplot_main()
 
 
-def submit(event, user_input):
+def submit(event, user_input, start):
+    global START_TIMESTAMP, END_TIMESTAMP
     try:
         user_input = int(user_input)
     except:
         print("Please enter a integer value")
         return
-    START_TIMESTAMP = user_input
+    if start:
+        START_TIMESTAMP = user_input
+    else:
+        END_TIMESTAMP = user_input
 
 
 if __name__ == '__main__':
