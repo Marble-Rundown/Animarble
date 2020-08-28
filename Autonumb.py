@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from utils import create_unique_filename
 
 AUDIO_AMPLITUDE_NUMB_THRESHOLD = 250
+AVERAGE_WINDOW_LENGTH = 10000
 
 
 def parse_row(row):
@@ -34,13 +35,16 @@ def main():
     thresholded_audio_data = np.where(
         np.abs(mean_audio_data) >= AUDIO_AMPLITUDE_NUMB_THRESHOLD, 1, 0)
 
+    averaged_audio_data = np.convolve(
+        thresholded_audio_data, np.ones(AVERAGE_WINDOW_LENGTH), mode="same")
+
     thresholds = np.empty(0)
     timestamps = np.empty(0)
 
     def get_threshold(ms):
         idx = round(ms * sample_rate / 1000)
-        if idx < len(thresholded_audio_data):
-            return True, thresholded_audio_data[idx]
+        if idx < len(audio_data):
+            return True, (averaged_audio_data[idx] > 0)
         else:
             return False, 0
 
