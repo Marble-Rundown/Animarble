@@ -141,6 +141,7 @@ def main():
             else:
                 print(f"Couldn't find face at timestamp {timestamp}")
                 row_dict = last_row_dict
+                row_dict["timestamp"] = timestamp
 
             mvid_writer.writerow(row_dict)
             last_row_dict = row_dict
