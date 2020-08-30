@@ -55,11 +55,17 @@ def rcp(ms, angle):
     right_pan_setpoint_track.add_control_point(index, angle)
 
 
+def rca(start_ms, start_angle, end_ms, end_angle):
+    rcp(start_ms, start_angle)
+    rcp(end_ms, end_angle)
+
+
 def rn(startms, endms):
     global right_pan_offset_track, right_tilt_offset_track
     start_index = round(startms / ARDUINO_SAMPLING_INTERVAL)
     end_index = round(endms / ARDUINO_SAMPLING_INTERVAL)
     right_pan_offset_track.add_region_modifier(start_index, end_index, 0)
+    right_tilt_offset_track.add_region_modifier(start_index, end_index, 0)
 
 
 def lcp(ms, angle):
@@ -68,11 +74,17 @@ def lcp(ms, angle):
     left_pan_setpoint_track.add_control_point(index, angle)
 
 
+def lca(start_ms, start_angle, end_ms, end_angle):
+    lcp(start_ms, start_angle)
+    lcp(end_ms, end_angle)
+
+
 def ln(startms, endms):
     global left_pan_offset_track, left_tilt_offset_track
     start_index = round(startms / ARDUINO_SAMPLING_INTERVAL)
     end_index = round(endms / ARDUINO_SAMPLING_INTERVAL)
     left_pan_offset_track.add_region_modifier(start_index, end_index, 0)
+    left_tilt_offset_track.add_region_modifier(start_index, end_index, 0)
 
 
 def workspace():
@@ -81,78 +93,35 @@ def workspace():
     #           EDIT ME HERE!!!            #
     ########################################
 
-    # ln(0, 7049)
-    # ln(12525, 15892)
-    # ln(19038, 20991)
+    def part1():
+        # Definitely Bob
+        rca(4991, 90, 6100, 50)
+        lca(4991 + 450, 90, 6100 + 450, 130)
 
-    # rn(6609, 13186)
-    # rn(15704, 19260)
-    # rn(20613, 23750)
+        # Before we get going
+        rca(24783, 50, 25446, 90)
 
-    # rcp(3474, 90)
-    # rcp(3894, 50)
+        # Exciting stuff Dan
+        rca(34369, 90, 34972, 50)
 
-    # lcp(3474 + 300, 90)
-    # lcp(3894 + 300, 130)
+        # And with that
+        lca(419620, 130, 420585, 90)
+        rca(419620 + 400, 50, 420585 + 400, 90)
 
-    # lcp(19040, 130)
-    # lcp(19320, 90)
+    def part2():
+        # Dan solo
+        ln(0, 143500)
 
-    # lcp(19040 + 250, 50)
-    # lcp(19320 + 250, 90)
+    def part3():
+        # Wow, already?
+        lca(83945, 90, 84168, 130)
+        rca(83945 + 250, 90, 84168 + 250, 50)
 
-    ''' Dan's Pan Setpoints '''
-    # I'm Dan
-    # rcp(4869, 90)
-    # rcp(5109, 50)
+        # Well, thanks again
+        lca(88713, 130, 89130, 90)
+        rca(88713 + 250, 50, 89130 + 250, 90)
 
-    # # But first,
-    # rcp(19834, 50)
-    # rcp(20280, 90)
-
-    # # Also had comments about you
-    # rcp(626845, 50)
-    # rcp(627445, 50)
-
-    # # You're very welcome
-    # rcp(288787, 50)
-    # rcp(289070, 90)
-    # rcp(293200, 90)
-    # rcp(293700, 50)
-
-    # # Question of the Day
-    # rcp(355446, 50)
-    # rcp(355928, 90)
-
-    # # to the death
-    # rcp(385981, 90)
-    # rcp(386574, 50)
-    # rcp(387167, 90)
-
-    # # T pun
-    # rcp(499927, 90)
-    # rcp(500594, 50)
-
-    # # Up next
-    # rcp(606487, 50)
-    # rcp(607276, 90)
-
-    # ''' Bob's Setpoints '''
-    # # Oh?
-    # lcp(7738, 90)
-    # lcp(8066, 130)
-
-    # # QOTD
-    # lcp(355412, 130)
-    # lcp(355913, 90)
-
-    # # T pun
-    # lcp(499927 + 200, 90)
-    # lcp(500594 + 200, 130)
-
-    # # Up next
-    # lcp(606487 + 200, 130)
-    # lcp(607276 + 200, 90)
+    # part1()
 
 #############################
 #           Main            #
