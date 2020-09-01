@@ -1,10 +1,12 @@
-import pygame, csv
+import pygame, csv, wave, sys
 import numpy as np
+import matplotlib.pyplot as plt
 from threading import Thread
 from pygame.locals import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from objloader import *
+from math import *
 
 
 #############################
@@ -12,6 +14,7 @@ from objloader import *
 #############################
 FRAME_RATE = 100
 MARBLE_OFFSET = 20
+ARDUINO_INTERVAL = 50
 
 
 #############################
@@ -19,6 +22,7 @@ MARBLE_OFFSET = 20
 #############################
 frame_time = int(round(1 / FRAME_RATE * 1000))
 
+# Pygame and openGL marble rendering
 pygame.init()
 display = (800, 600)
 pygame.display.set_mode(display, DOUBLEBUF | OPENGL)
@@ -39,13 +43,29 @@ marble.generate()
 glMatrixMode(GL_PROJECTION)
 glLoadIdentity()
 width, height = display
-# gluPerspective(90.0, width/float(height), 1, 100.0)
 glOrtho(-display[0] / 15, display[0]/ 15, -display[1] / 15, display[1] / 15, 0.1, 40.0)
 glEnable(GL_DEPTH_TEST)
 glMatrixMode(GL_MODELVIEW)
 
 glTranslatef(0.0, 0.0, -30)
 glRotatef(180, 0, 1, 0)
+
+
+# Matplotlib .wav audio
+spf = wave.open("wavfile.wav", "r")
+
+signal = spf.readframes(-1)
+signal = np.fromstring(signal, "Int16")
+
+if spf.getnchannels() == 2:
+    print("Just mono files")
+    sys.exit(0)
+
+plt.figure(1)
+plt.plot(signal)
+plt.figure(1)
+plt.plot(signal)
+plt.show()
 
 
 #############################
@@ -66,14 +86,24 @@ def main():
             if 'timestamp' not in row:
                 right_data.append([float(x) for x in row])
     
-    # max_timestamp = max(left_data[-1][0], right_data[-1][0])
-    # x_vals = [50 * i for i in range(max_timestamp / )]
+    max_timestamp = max(left_data[-1][0], right_data[-1][0])
+    i_times = [ARDUINO_INTERVAL * i for i in range(ceil(max_timestamp / ARDUINO_INTERVAL) + 1)]
+    i_left_tilt = np.interp(i_times, [left_data[i][0] for i in range(len(left_data))], [left_data[i][1] for i in range(len(left_data))], right=left_data[-1][1])
+    i_left_pan = np.interp(i_times, [left_data[i][0] for i in range(len(left_data))], [left_data[i][2] for i in range(len(left_data))], right=left_data[-1][2])
+    i_right_tilt = np.interp(i_times, [right_data[i][0] for i in range(len(right_data))], [right_data[i][1] for i in range(len(right_data))], right=right_data[-1][1])
+    i_right_pan = np.interp(i_times, [right_data[i][0] for i in range(len(right_data))], [right_data[i][2] for i in range(len(right_data))], right=right_data[-1][2])
 
+    i_left = np.dstack((i_left_tilt, i_left_pan))[0]
+    i_right = np.dstack((i_right_tilt, i_right_pan))[0]
+
+    converted_i_times = np.array([[t] for t in i_times])
+    i_combined = np.append(converted_i_times, i_left, 1)
+    i_combined = np.append(i_combined, i_right, 1)
 
     left_prev, left_curr = (0, 0), (0, 0)
     right_prev, right_curr = (0, 0), (0, 0)
     time = 0
-    while True:
+    while len(i_combined) > 0:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -81,42 +111,23 @@ def main():
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
-        if time > left_data[0][0]:
-            print(left_data[0][1], left_data[0][2])
-            left_curr = (left_data[0][1], left_data[0][2])
-            rotate_marble(-1, left_curr[0], left_curr[1])
-            left_prev = left_curr
-            left_data.pop(0)
-        else:
-            rotate_marble(-1, left_prev[0], left_prev[1]) if left_prev else rotate_marble(-1, 90, 90)
-        
-        if time > right_data[0][0]:
-            print(right_data[0][1], right_data[0][2])
-            right_curr = (right_data[0][1], right_data[0][2])
-            rotate_marble(1, right_curr[0], right_curr[1])
-            right_prev = right_curr
-            right_data.pop(0)
-        else:
-            rotate_marble(1, right_prev[0], right_prev[1]) if right_prev else rotate_marble(1, 90, 90)
+        rotate_marbles(*i_combined[0][1:])
+        i_combined = i_combined[1:]
 
         pygame.display.flip()
-        pygame.time.wait(frame_time)
-        time += frame_time
+        pygame.time.wait(ARDUINO_INTERVAL)
+        time += ARDUINO_INTERVAL
 
 
 #############################
 #        Functions          #
 #############################
-def rotate_marble(side, x, y):
-    glPushMatrix()
-    glTranslatef(side * 20, 0, 0)
-    glRotatef(x, 1, 0, 0)
-    glRotatef(y, 0, -1, 0)
-    # glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-    # draw_sphere()
-    # draw_cylinder()
-    marble.render()
-    glPopMatrix()
+def create_file(file_name, file_type, n=0):
+    destination = './outputs/{0}{1}.{2}'.format(file_name, f'({n})', file_type)       # Add:    if n != 0 else ''    after f' ({n})' if you don't want the first file to have a number
+    if not os.path.isfile(destination):
+        return open(destination, 'w+')
+    else:
+        return create_file(file_name, file_type, n+1)
 
 def rotate_marbles(left_x, left_y, right_x, right_y):
     glPushMatrix()
