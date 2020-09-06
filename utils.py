@@ -1,5 +1,5 @@
 import os
-
+import time
 
 def create_unique_filename(filename):
     """Takes a base filename and constructs a new one if necessary to avoid conflicts"""
@@ -11,3 +11,6 @@ def create_unique_filename(filename):
         n += 1
         destination = f"{file_base}({n}){ext}"
     return destination
+
+def millisec():
+    return int(round(time.time() * 1000))

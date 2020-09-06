@@ -20,7 +20,7 @@ from math import ceil
 from OffsetTrack import *
 from SetpointTrack import *
 
-from utils import create_unique_filename
+from utils import create_unique_filename, millisec
 
 
 #############################
@@ -93,35 +93,32 @@ def workspace():
     #           EDIT ME HERE!!!            #
     ########################################
 
-    def part1():
-        # Definitely Bob
-        rca(4991, 90, 6100, 50)
-        lca(4991 + 450, 90, 6100 + 450, 130)
+    def both():
+        # Dan, you're slipping 
+        lca(18791, 90, 19250, 130)
+        rca(18791+400, 90, 19250+400, 50)
+        
+        # So that brings us to a quick
+        lca(218588, 130, 219056, 90)
+        rca(218588+300, 50, 219056+300, 90)
 
-        # Before we get going
-        rca(24783, 50, 25446, 90)
+        # Man, I'm jealous
+        lca(252774, 90, 253222, 130)
+        rca(252774+400, 90, 253222+400, 50)
 
-        # Exciting stuff Dan
-        rca(34369, 90, 34972, 50)
+        # So last week
+        lca(263803, 130, 264360, 90)
+        rca(263803+300, 50, 264360+300, 90)
 
-        # And with that
-        lca(419620, 130, 420585, 90)
-        rca(419620 + 400, 50, 420585 + 400, 90)
+        # How many things?
+        rca(348890, 90, 349323, 50)
+        lca(348890+400, 90, 349323+400, 130)
 
-    def part2():
-        # Dan solo
-        ln(0, 143500)
+        # Anyways
+        lca(361962, 130, 362447, 90)
+        rca(361962+300, 50, 362447+300, 90)
 
-    def part3():
-        # Wow, already?
-        lca(83945, 90, 84168, 130)
-        rca(83945 + 250, 90, 84168 + 250, 50)
-
-        # Well, thanks again
-        lca(88713, 130, 89130, 90)
-        rca(88713 + 250, 50, 89130 + 250, 90)
-
-    # part1()
+    # both()
 
 #############################
 #           Main            #
@@ -238,12 +235,16 @@ def pygame_main():
     start_index = int(round(START_TIMESTAMP / ARDUINO_SAMPLING_INTERVAL))
     end_index = int(round(END_TIMESTAMP / ARDUINO_SAMPLING_INTERVAL)
                     ) if END_TIMESTAMP != 0 else len(left_pan_angle) - 1
-    # print(start_index, end_index)
-    # start_index = 50
-    # print(left_pan_angle)
+    
+    for i in range(5, 0, -1):
+        pygame.display.set_caption(str(i))
+        pygame.display.flip()  
+        pygame.time.wait(1000)
 
+
+    start_ms = millisec()
+    timer = 0
     for left_pan, left_tilt, right_pan, right_tilt in zip(left_pan_angle, left_tilt_angle, right_pan_angle, right_tilt_angle):
-        # for i in range(start_index, len(left_pan_angle)):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -254,9 +255,14 @@ def pygame_main():
         rotate_marbles(left_pan, left_tilt, right_pan, right_tilt)
 
         pygame.display.flip()
-        if PLAYBACK_SPEED <= 3:
-            pygame.time.wait(
-                int(round(ARDUINO_SAMPLING_INTERVAL / PLAYBACK_SPEED)))
+        timer += ARDUINO_SAMPLING_INTERVAL/PLAYBACK_SPEED
+        elapsed_ms = millisec() - start_ms
+        waitTime = round(timer - elapsed_ms)
+        if waitTime >= 0:
+            pygame.time.wait(waitTime)
+            print(timer)
+        else:
+            print(f"Too slow at timer {timer} with waitTime {waitTime}")
     pygame.quit()
     return
 
