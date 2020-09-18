@@ -65,12 +65,20 @@ def identify_peaks(frames, slack, spread):
                     inPeak = True
     return peaks
 
-def create_base_movement_angles(peaks, max_range):
-    pan_offset_angles = np.random.normal(size=(len(peaks)))
-    tilt_offset_angles = np.random.normal(size=(len(peaks)))
+def create_base_movement_angles(max_values):
+    tilt_offset_angles = np.random.normal(-90, 0.7, size=(len(max_values)))
 
-    pan_offset_angles = pan_offset_angles/abs(pan_offset_angles).max()*max_range
-    tilt_offset_angles = tilt_offset_angles/abs(tilt_offset_angles).max()*max_range
+    pan_offset_angles = []
+
+    for i in tilt_offset_angles:
+        if i < -90:
+            difference = -(90+i)
+            pan_offset_angles += [math.sqrt((90*90)-((90-difference)*(90-difference)))]
+        else:
+            pan_offset_angles += [-math.sqrt((90*90)-(i*i))]
+
+    pan_offset_angles = (pan_offset_angles)*max_values
+    tilt_offset_angles = (tilt_offset_angles)*max_values
 
     return pan_offset_angles, tilt_offset_angles
 
@@ -89,15 +97,8 @@ def create_writable_data(max_values, pan_offset_angles, tilt_offset_angles, fram
     for i in peaks:
         timestamps += [int((i[0]+i[1])/2/frame_info[0]*1000/write_every_ms)]
 
-    for i in range(len(max_values)):
-        pan_offsets += [max_values[i]*pan_offset_angles[i]]
-        tilt_offsets += [max_values[i]*tilt_offset_angles[i]]
-
-    scale_factor_pan = max_range/abs(np.array(pan_offsets)).max()
-    scale_factor_tilt = max_range/abs(np.array(tilt_offsets)).max()
-
-    pan_offsets = np.array(pan_offsets)*scale_factor_pan
-    tilt_offsets = np.array(tilt_offsets)*scale_factor_tilt
+    pan_offsets = (pan_offset_angles/abs(pan_offset_angles).max())*max_range
+    tilt_offsets = (tilt_offset_angles/abs(tilt_offset_angles).max())*max_range
 
     actual_pan_offset = []
     actual_tilt_offset = []
@@ -115,38 +116,43 @@ def create_writable_data(max_values, pan_offset_angles, tilt_offset_angles, fram
 
     return np.array([actual_pan_offset, actual_tilt_offset, np.full((len(actual_pan_offset)), pan_setpoint), np.full((len(actual_pan_offset)), tilt_setpoint)])
 
-def smooth_data(writable_data, smooth_scale):
+def smooth_data(writable_data):
     indexes = []
     for i in range(len(writable_data[0])):
         if writable_data[0][i] != 0:
             indexes += [i]
     
     future_index = indexes[0]
+    prev_index = 0
     prev_val_pan = 0
     prev_val_tilt = 0
-    print(indexes)
+    curr_split = future_index/2
     for i in range(len(writable_data[0])):
-        if not (i in indexes):
-            distance_to_next_index = (future_index-i)/smooth_scale
-            change_in_value_pan = (writable_data[0][indexes[indexes.index(future_index)]]-prev_val_pan)/distance_to_next_index
-            change_in_value_tilt = (writable_data[1][indexes[indexes.index(future_index)]]-prev_val_tilt)/distance_to_next_index
-            if change_in_value_pan > 0:
-                writable_data[0][i] = writable_data[0][i-1]-change_in_value_pan
-            else:
-                writable_data[0][i] = writable_data[0][i-1]+change_in_value_pan
-            if change_in_value_tilt > 0:
-                writable_data[1][i] = writable_data[1][i-1]-change_in_value_tilt
-            else:
-                writable_data[1][i] = writable_data[1][i-1]+change_in_value_tilt
-            prev_val_pan = writable_data[0][i-1]
-            prev_val_tilt = writable_data[1][i-1]
-        elif i in indexes:
-            prev_val_pan = writable_data[0][i-1]
-            prev_val_tilt = writable_data[1][i-1]
+        if i in indexes:
             try:
-                future_index = indexes[indexes.index(i)+1]
+                prev_index = future_index
+                future_index = indexes[(indexes.index(future_index)+1)]
+                curr_split = (future_index+prev_index)/2
             except:
-                future_index = indexes[indexes.index(i)]
+                pass
+        else:
+            if i > curr_split+prev_index:
+                difference_pan = (writable_data[0][future_index]-prev_val_pan)/(future_index-i)/2
+                difference_tilt = (writable_data[1][future_index]-prev_val_tilt)/(future_index-i)/2
+                writable_data[0][i] = prev_val_pan+difference_pan
+                writable_data[1][i] = prev_val_tilt+difference_tilt
+            elif i == curr_split:
+                difference_pan = (writable_data[0][future_index]-prev_val_pan)/(future_index-i)/2
+                difference_tilt = (writable_data[1][future_index]-prev_val_tilt)/(future_index-i)/2
+                writable_data[0][i] = prev_val_pan+difference_pan
+                writable_data[1][i] = prev_val_tilt+difference_tilt
+            else:
+                difference_pan = (-prev_val_pan)/(curr_split-i)/2
+                difference_tilt = (-prev_val_tilt)/(curr_split-i)/2
+                writable_data[0][i] = prev_val_pan+difference_pan
+                writable_data[1][i] = prev_val_tilt+difference_tilt
+        prev_val_pan = writable_data[0][i]
+        prev_val_tilt = writable_data[1][i]
     
     return np.around(writable_data, 2)
 
@@ -180,13 +186,18 @@ def generate_movement(input_file, output_file):
     frames = normalize(frames)
 
     peaks = identify_peaks(frames, 0.99, 1000)
-    pan_offset_angles, tilt_offset_angles = create_base_movement_angles(peaks, 10)
     max_values = normalize(np.array(get_highest_amplitudes(peaks, frames, 10)))
+
+    pan_offset_angles, tilt_offset_angles = create_base_movement_angles(max_values)
     
     writable_data = create_writable_data(max_values, pan_offset_angles, tilt_offset_angles, frame_info, peaks, 50, 90, 90, 10)
 
-    smoothed_data = smooth_data(writable_data, 1)
-    
+    print(writable_data[0])
+
+    smoothed_data = smooth_data(writable_data)
+
+    print(smoothed_data[0])
+
     create_output_file(smoothed_data, output_file)
 
 generate_movement(args.input, args.output)
