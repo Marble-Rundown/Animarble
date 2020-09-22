@@ -225,7 +225,7 @@ def main():
 
                 tilt_offset -= mouth_offset  # Subtract so mouth moves down while talking
 
-                pan_offset, tilt_offset = round(pan_offset), round(tilt_offset)
+                pan_offset, tilt_offset = int(round(pan_offset)), int(round(tilt_offset))
 
                 # Write these offsets to .mdat file
                 row_dict = {
