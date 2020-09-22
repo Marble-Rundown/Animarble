@@ -30,7 +30,7 @@ def parse_row(row):
 
 def main():
     sample_rate, audio_data = wavfile.read(wav_file)
-    mean_audio_data = np.mean(audio_data, axis=1)
+    mean_audio_data = np.mean(audio_data, axis=1) if len(audio_data.shape) > 1 else audio_data
 
     thresholded_audio_data = np.where(
         np.abs(mean_audio_data) >= AUDIO_AMPLITUDE_NUMB_THRESHOLD, 1, 0)

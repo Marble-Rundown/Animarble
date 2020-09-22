@@ -94,29 +94,35 @@ def workspace():
     ########################################
 
     def both():
-        # Dan, you're slipping 
-        lca(18791, 90, 19250, 130)
-        rca(18791+400, 90, 19250+400, 50)
+        # What'd you do with extra week?
+        lca(4510 , 90, 4870, 130)
+        rca(4510+400, 90, 4870+400, 50)
         
-        # So that brings us to a quick
-        lca(218588, 130, 219056, 90)
-        rca(218588+300, 50, 219056+300, 90)
+        # If you feel like you're missing out
+        rca(38344, 50, 38911, 90)
+        lca(38344+300, 130, 38911+300, 90)
 
-        # Man, I'm jealous
-        lca(252774, 90, 253222, 130)
-        rca(252774+400, 90, 253222+400, 50)
+        # So the Sand Marble Rally is back
+        lca(50709, 90, 51276, 130)
+        rca(50709+400, 90, 51276+400, 50)
 
-        # So last week
-        lca(263803, 130, 264360, 90)
-        rca(263803+300, 50, 264360+300, 90)
+        # We'll see you in a moment
+        lca(257501, 130, 257901, 90)
 
-        # How many things?
-        rca(348890, 90, 349323, 50)
-        lca(348890+400, 90, 349323+400, 130)
+        # (reset back to angle)
+        lca(259474, 90, 260000, 130)
 
-        # Anyways
-        lca(361962, 130, 362447, 90)
-        rca(361962+300, 50, 362447+300, 90)
+        # And now
+        rca(305969, 50, 306405, 90)
+        lca(305969+400, 130, 306405+400, 90)
+
+        # So it's time to bring out
+        rca(484579, 90, 485100, 50)
+        lca(484579+400, 90, 485100+400, 130)
+
+        # So last episode
+        lca(538037, 130, 538187, 90)
+        rca(538037+300, 50, 538187+300, 90)
 
     # both()
 
