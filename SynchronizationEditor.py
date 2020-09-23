@@ -10,6 +10,7 @@ import wave
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
+import keyboard
 from matplotlib.widgets import Button, TextBox
 from pygame.locals import *
 from OpenGL.GL import *
@@ -19,6 +20,7 @@ from scipy.interpolate import interp1d
 from math import ceil
 from OffsetTrack import *
 from SetpointTrack import *
+
 
 from utils import create_unique_filename, millisec
 
@@ -51,17 +53,20 @@ marble.generate()
 
 def rcp(ms, angle):
     global right_pan_setpoint_track
+    global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
     index = round(ms / ARDUINO_SAMPLING_INTERVAL)
     right_pan_setpoint_track.add_control_point(index, angle)
 
 
 def rca(start_ms, start_angle, end_ms, end_angle):
+    global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
     rcp(start_ms, start_angle)
     rcp(end_ms, end_angle)
 
 
 def rn(startms, endms):
     global right_pan_offset_track, right_tilt_offset_track
+    global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
     start_index = round(startms / ARDUINO_SAMPLING_INTERVAL)
     end_index = round(endms / ARDUINO_SAMPLING_INTERVAL)
     right_pan_offset_track.add_region_modifier(start_index, end_index, 0)
@@ -70,17 +75,20 @@ def rn(startms, endms):
 
 def lcp(ms, angle):
     global left_pan_setpoint_track
+    global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
     index = round(ms / ARDUINO_SAMPLING_INTERVAL)
     left_pan_setpoint_track.add_control_point(index, angle)
 
 
 def lca(start_ms, start_angle, end_ms, end_angle):
+    global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
     lcp(start_ms, start_angle)
     lcp(end_ms, end_angle)
 
 
 def ln(startms, endms):
     global left_pan_offset_track, left_tilt_offset_track
+    global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
     start_index = round(startms / ARDUINO_SAMPLING_INTERVAL)
     end_index = round(endms / ARDUINO_SAMPLING_INTERVAL)
     left_pan_offset_track.add_region_modifier(start_index, end_index, 0)
@@ -124,15 +132,13 @@ def workspace():
 #           Main            #
 #############################
 
-
 def matplot_main():
     global initialized
     global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
     if not initialized:
-        raw_left_timestamps, raw_left_pan_offset, raw_left_tilt_offset, raw_left_pan_setpoint, raw_left_tilt_setpoint = parse_mdat_file(
-            left_mdat_file)
-        raw_right_timestamps, raw_right_pan_offset, raw_right_tilt_offset, raw_right_pan_setpoint, raw_right_tilt_setpoint = parse_mdat_file(
-            right_mdat_file)
+        
+        #raw_left_timestamps, raw_left_pan_offset, raw_left_tilt_offset, raw_left_pan_setpoint, raw_left_tilt_setpoint = parse_mdat_file(left_mdat_file)
+        #raw_right_timestamps, raw_right_pan_offset, raw_right_tilt_offset, raw_right_pan_setpoint, raw_right_tilt_setpoint = parse_mdat_file(right_mdat_file)
 
         max_timestamp = max(raw_left_timestamps[-1], raw_right_timestamps[-1])
 
@@ -143,7 +149,7 @@ def matplot_main():
 
         initialized = True
 
-    spf = wave.open('assets/wavfile.wav', 'r')
+    spf = wave.open('assets/Drew_Week7_trimmed.wav', 'r')
 
     signal = spf.readframes(-1)
     signal = np.fromstring(signal, "Int16")
@@ -177,7 +183,7 @@ def matplot_main():
     plt.subplot(9, 9, (73, 81))
     plt.title('right audio waveform')
     plt.plot(signal, color='red')
-
+  
     seek_start = TextBox(
         plt.axes([0.1, 0.05, 0.1, 0.050]), 'start', initial='0')
     seek_start.on_submit(lambda e, i: submit(e, i, True))
@@ -200,8 +206,12 @@ def matplot_main():
     # plt.pause(0.1)
     plt.show()
 
-
 def pygame_main():
+    global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
+    #raw_left_timestamps, raw_left_pan_offset, raw_left_tilt_offset, raw_left_pan_setpoint, raw_left_tilt_setpoint = parse_mdat_file(left_mdat_file)
+    #raw_right_timestamps, raw_right_pan_offset, raw_right_tilt_offset, raw_right_pan_setpoint, raw_right_tilt_setpoint = parse_mdat_file(right_mdat_file)
+    max_timestamp = max(raw_left_timestamps[-1], raw_right_timestamps[-1])
+
     pygame.init()
     display = (800, 600)
     pygame.display.set_mode(display, DOUBLEBUF | OPENGL)
@@ -231,20 +241,40 @@ def pygame_main():
 
     left_pan_angle, left_tilt_angle, right_pan_angle, right_tilt_angle = export(
         left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track)
-
-    start_index = int(round(START_TIMESTAMP / ARDUINO_SAMPLING_INTERVAL))
-    end_index = int(round(END_TIMESTAMP / ARDUINO_SAMPLING_INTERVAL)
-                    ) if END_TIMESTAMP != 0 else len(left_pan_angle) - 1
     
-    for i in range(5, 0, -1):
+    for i in range(1, 0, -1):
         pygame.display.set_caption(str(i))
         pygame.display.flip()  
         pygame.time.wait(1000)
 
+    start_ms = 0
+    end_ms = 0
 
-    start_ms = millisec()
+    option = input("Please enter 'p' for entire animation, 's' for a slice, 'c' to add a control point pair, or 'q' to quit (p/s/c/q): ")
+    if option == 'p':
+        start_ms = 0
+        end_ms = max_timestamp
+    elif option == 's':
+        start_ms = float(input("Please enter a starting timestamp (must be greater than or equal to 0): "))
+        end_ms = float(input("Please enter an ending timestamp (must be less than or equal to " + str(max_timestamp) + "): "))
+    elif option == 'c':
+        add_cp_pair()
+        print("Saving changes...")
+        return
+    elif option == 'q':
+        return False
+    
+    start_index = int(round(start_ms / ARDUINO_SAMPLING_INTERVAL))
+    end_index = int(round(end_ms / ARDUINO_SAMPLING_INTERVAL)
+                    ) if end_ms != 0 else len(left_pan_angle) - 1
     timer = 0
-    for left_pan, left_tilt, right_pan, right_tilt in zip(left_pan_angle, left_tilt_angle, right_pan_angle, right_tilt_angle):
+    kool_start_ms = start_ms #just setting another dummy variable to start_ms so i don't lose the value
+    start_ms = millisec()
+    for i in range(start_index, (end_index + 1)):
+        left_pan = left_pan_angle[i]
+        left_tilt = left_tilt_angle[i]
+        right_pan = right_pan_angle[i]
+        right_tilt = right_tilt_angle[i]
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -260,17 +290,19 @@ def pygame_main():
         waitTime = round(timer - elapsed_ms)
         if waitTime >= 0:
             pygame.time.wait(waitTime)
-            print(timer)
+            print(timer + kool_start_ms)
         else:
             print(f"Too slow at timer {timer} with waitTime {waitTime}")
+        if keyboard.is_pressed('q'):
+            break
     pygame.quit()
     return
-
 
 #############################
 #        Functions          #
 #############################
 def create_file(file_name, file_type, n=0):
+    global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
     # Add:    if n != 0 else ''    after f' ({n})' if you don't want the first file to have a number
     destination = './outputs/{0}{1}.{2}'.format(file_name, f'({n})', file_type)
     if not os.path.isfile(destination):
@@ -280,6 +312,7 @@ def create_file(file_name, file_type, n=0):
 
 
 def parse_row(row):
+    global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
     timestamp = int(row["timestamp"])
 
     pan_offset, pan_setpoint = int(row["pan_offset"]), int(row["pan_setpoint"])
@@ -291,6 +324,7 @@ def parse_row(row):
 
 
 def parse_mdat_file(mdat_file):
+    global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
     raw_timestamps = np.empty(0)
     raw_pan_offset = np.empty(0)
     raw_pan_setpoint = np.empty(0)
@@ -314,8 +348,8 @@ def parse_mdat_file(mdat_file):
 
     return raw_timestamps, raw_pan_offset, raw_tilt_offset, raw_pan_setpoint, raw_tilt_setpoint
 
-
 def resample_tracks(raw_timestamps, raw_pan_offset, raw_tilt_offset, raw_pan_setpoint, raw_tilt_setpoint, sampling_interval, max_timestamp):
+    global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
     interp_pan_offset = interp1d(
         raw_timestamps, raw_pan_offset, kind="cubic", fill_value="extrapolate")
     interp_tilt_offset = interp1d(
@@ -344,6 +378,7 @@ def resample_tracks(raw_timestamps, raw_pan_offset, raw_tilt_offset, raw_pan_set
 
 
 def get_angled(offset_track, setpoint_track):
+    global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
     modified_offset_track = offset_track.apply_modifiers()
     modified_control_points = setpoint_track.apply_control_points()
     angle = modified_offset_track + modified_control_points
@@ -395,9 +430,11 @@ def save_to_msync(left_pan_offset_track, left_tilt_offset_track, left_pan_setpoi
             }
             msync_writer.writerow(row_dict)
             time += ARDUINO_SAMPLING_INTERVAL
+    print("Your data has been saved to a .msync file!")
 
 
 def rotate_marbles(left_pan, left_tilt, right_pan, right_tilt):
+    global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
     OPENGL_PAN_OFFSET = 90
     OPENGL_TILT_OFFSET = 90
 
@@ -417,15 +454,21 @@ def rotate_marbles(left_pan, left_tilt, right_pan, right_tilt):
 
 
 def playback(event, speed):
-    global PLAYBACK_SPEED
-    PLAYBACK_SPEED = speed
-    plt.close('all')
-    pygame_main()
+    global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
+    my_answer = 'y'
+    while my_answer == 'y':
+        global PLAYBACK_SPEED
+        PLAYBACK_SPEED = speed
+        plt.close('all')
+        my_var = pygame_main()
+        if my_var == False:
+            break
     matplot_main()
 
 
 def submit(event, user_input, start):
     global START_TIMESTAMP, END_TIMESTAMP
+    global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
     try:
         user_input = int(user_input)
     except:
@@ -436,6 +479,59 @@ def submit(event, user_input, start):
     else:
         END_TIMESTAMP = user_input
 
+def add_cp_pair():
+    global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
+    
+    max_timestamp = max(raw_left_timestamps[-1], raw_right_timestamps[-1])
+
+    marble = input("Which marble would you like to add a control point pair (Enter 'l' for left, 'r' for right)? ")
+    direction = input("Which direction would you like to turn (turnleft, turncenter, turnright)? ")
+    start_ms = float(input("Enter a starting timestamp (ms): "))
+    end_ms = float(input("Enter an ending timestamp (ms): "))
+    ending_angle = 90 #by default
+    if direction == "turnleft":
+        ending_angle = 50
+    elif direction == "turncenter":
+        ending_angle = 90
+    elif direction == "turnright":
+        ending_angle = 130
+
+    
+    if marble == 'r': 
+        corrected_start_index = np.abs(raw_right_timestamps - start_ms).argmin()
+        corrected_end_index = np.abs(raw_right_timestamps - end_ms).argmin()
+        starting_angle = raw_right_pan_setpoint[corrected_start_index]
+        rca(start_ms, starting_angle, end_ms, ending_angle)
+        right_pan_setpoint_track.apply_control_points()
+        '''
+        rate_of_change = float( (ending_angle - raw_right_pan_setpoint[corrected_start_index]) / (corrected_end_index - corrected_start_index))
+        curr_angle = raw_right_pan_setpoint[corrected_start_index]
+        for row_index in range(corrected_start_index, (corrected_end_index + 1)):
+            print(curr_angle)
+            raw_right_pan_setpoint[row_index] = curr_angle
+            curr_angle += rate_of_change
+        '''
+    elif marble == 'l':
+        corrected_start_index = np.abs(raw_left_timestamps - start_ms).argmin()
+        corrected_end_index = np.abs(raw_left_timestamps - end_ms).argmin()
+        starting_angle = raw_left_pan_setpoint[corrected_start_index]
+        lca(start_ms, starting_angle, end_ms, ending_angle)
+        left_pan_setpoint_track.apply_control_points()
+        '''
+        rate_of_change = float( (ending_angle - raw_left_pan_setpoint[corrected_start_index]) / (corrected_end_index - corrected_start_index))
+        curr_angle = raw_left_pan_setpoint[corrected_start_index]
+        for row_index in range(corrected_start_index, (corrected_end_index + 1)):
+            print(curr_angle)
+            raw_left_pan_setpoint[row_index] = curr_angle
+            curr_angle += rate_of_change
+        '''
+    '''
+    left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track = resample_tracks(
+        raw_left_timestamps, raw_left_pan_offset, raw_left_tilt_offset, raw_left_pan_setpoint, raw_left_tilt_setpoint, ARDUINO_SAMPLING_INTERVAL, max_timestamp)
+    right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track = resample_tracks(
+        raw_right_timestamps, raw_right_pan_offset, raw_right_tilt_offset, raw_right_pan_setpoint, raw_right_tilt_setpoint, ARDUINO_SAMPLING_INTERVAL, max_timestamp)
+    '''
+    print("Control point pair added!", marble, direction, start_ms, end_ms)
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(
@@ -450,6 +546,10 @@ if __name__ == '__main__':
 
     left_mdat_file = args.left
     right_mdat_file = args.right
+
+    raw_left_timestamps, raw_left_pan_offset, raw_left_tilt_offset, raw_left_pan_setpoint, raw_left_tilt_setpoint = parse_mdat_file(left_mdat_file)
+    raw_right_timestamps, raw_right_pan_offset, raw_right_tilt_offset, raw_right_pan_setpoint, raw_right_tilt_setpoint = parse_mdat_file(right_mdat_file)
+    print("mdats have been parsed")
 
     output_filename = args.output if args.output is not None else create_unique_filename(
         f"outputs/SynchronizationEditor/{os.path.splitext(os.path.basename(left_mdat_file))[0]}_{os.path.splitext(os.path.basename(right_mdat_file))[0]}.msync")
