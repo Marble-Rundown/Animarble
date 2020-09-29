@@ -6,7 +6,7 @@ import pygame
 import os
 import argparse
 import csv
-import wave
+from scipy.io import wavfile
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
@@ -42,7 +42,15 @@ initialized = False
 left_pan_offset_track = left_tilt_offset_track = left_pan_setpoint_track = left_tilt_setpoint_track = None
 right_pan_offset_track = right_tilt_offset_track = right_pan_setpoint_track = right_tilt_setpoint_track = None
 
-pygame.init()
+lp_regions, lp_control_points = [], []
+lt_regions, lt_control_points = [], []
+rp_regions, rp_control_points = [], []
+rt_regions, rt_control_points = [], []
+
+sample_rate, audio_data = wavfile.read('assets/wavfile.wav')
+left_wave = right_wave = np.mean(audio_data, axis=1)
+
+# pygame.init()
 display = (800, 600)
 pygame.display.set_mode(display, DOUBLEBUF | OPENGL)
 
@@ -132,44 +140,26 @@ def workspace():
 #           Main            #
 #############################
 
-def matplot_main():
-    global initialized
+def main():
     global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
-    if not initialized:
-        
-        #raw_left_timestamps, raw_left_pan_offset, raw_left_tilt_offset, raw_left_pan_setpoint, raw_left_tilt_setpoint = parse_mdat_file(left_mdat_file)
-        #raw_right_timestamps, raw_right_pan_offset, raw_right_tilt_offset, raw_right_pan_setpoint, raw_right_tilt_setpoint = parse_mdat_file(right_mdat_file)
 
-        max_timestamp = max(raw_left_timestamps[-1], raw_right_timestamps[-1])
+    raw_left_timestamps, raw_left_pan_offset, raw_left_tilt_offset, raw_left_pan_setpoint, raw_left_tilt_setpoint = parse_mdat_file(
+        left_mdat_file)
+    raw_right_timestamps, raw_right_pan_offset, raw_right_tilt_offset, raw_right_pan_setpoint, raw_right_tilt_setpoint = parse_mdat_file(
+        right_mdat_file)
 
-        left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track = resample_tracks(
-            raw_left_timestamps, raw_left_pan_offset, raw_left_tilt_offset, raw_left_pan_setpoint, raw_left_tilt_setpoint, ARDUINO_SAMPLING_INTERVAL, max_timestamp)
-        right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track = resample_tracks(
-            raw_right_timestamps, raw_right_pan_offset, raw_right_tilt_offset, raw_right_pan_setpoint, raw_right_tilt_setpoint, ARDUINO_SAMPLING_INTERVAL, max_timestamp)
+    max_timestamp = max(raw_left_timestamps[-1], raw_right_timestamps[-1])
 
-        initialized = True
+    left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track = resample_tracks(
+        raw_left_timestamps, raw_left_pan_offset, raw_left_tilt_offset, raw_left_pan_setpoint, raw_left_tilt_setpoint, ARDUINO_SAMPLING_INTERVAL, max_timestamp)
+    right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track = resample_tracks(
+        raw_right_timestamps, raw_right_pan_offset, raw_right_tilt_offset, raw_right_pan_setpoint, raw_right_tilt_setpoint, ARDUINO_SAMPLING_INTERVAL, max_timestamp)
 
-    spf = wave.open('assets/Drew_Week7_trimmed.wav', 'r')
+  
+    
 
-    signal = spf.readframes(-1)
-    signal = np.fromstring(signal, "Int16")
-
-    workspace()
-    # plt.ion()
-    plt.figure(1)
-
-    plt.subplot(9, 9, (1, 9))
-    plt.title('left pan offsets')
-    plt.plot(left_pan_offset_track.apply_modifiers(), color='blue')
-    plt.subplot(9, 9, (10, 18))
-    plt.title('left tilt offsets')
-    plt.plot(left_tilt_offset_track.apply_modifiers(), color='blue')
-    plt.subplot(9, 9, (19, 27))
-    plt.title('left pan setpoints')
-    plt.plot(left_pan_setpoint_track.apply_control_points(), color='blue')
-    plt.subplot(9, 9, (28, 36))
-    plt.title('left audio waveform')
-    plt.plot(signal, color='blue')
+def matplot_main():
+    global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
 
     plt.subplot(9, 9, (46, 54))
     plt.title('right pan offsets')
@@ -183,7 +173,7 @@ def matplot_main():
     plt.subplot(9, 9, (73, 81))
     plt.title('right audio waveform')
     plt.plot(signal, color='red')
-  
+
     seek_start = TextBox(
         plt.axes([0.1, 0.05, 0.1, 0.050]), 'start', initial='0')
     seek_start.on_submit(lambda e, i: submit(e, i, True))
@@ -211,6 +201,7 @@ def matplot_main():
         return
     playback(float(my_speed))
     plt.show()
+
 
 def pygame_main():
     global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
@@ -320,15 +311,45 @@ def create_file(file_name, file_type, n=0):
     else:
         return create_file(file_name, file_type, n+1)
 
+def display_plots():
+    plt.close('all')
+    plt.figure(1)
+
+    plt.subplot(9, 9, (1, 9))
+    plt.title('left pan offsets')
+    plt.plot(left_pan_offset_track.apply_modifiers(), color='blue')
+    plt.subplot(9, 9, (10, 18))
+    plt.title('left tilt offsets')
+    plt.plot(left_tilt_offset_track.apply_modifiers(), color='blue')
+    plt.subplot(9, 9, (19, 27))
+    plt.title('left pan setpoints')
+    plt.plot(left_pan_setpoint_track.apply_control_points(), color='blue')
+    plt.subplot(9, 9, (28, 36))
+    plt.title('left audio waveform')
+    plt.plot(left_wave, color='blue')
+
+    plt.subplot(9, 9, (46, 54))
+    plt.title('right pan offsets')
+    plt.plot(right_pan_offset_track.apply_modifiers(), color='red')
+    plt.subplot(9, 9, (55, 63))
+    plt.title('right tilt offsets')
+    plt.plot(right_tilt_offset_track.apply_modifiers(), color='red')
+    plt.subplot(9, 9, (64, 72))
+    plt.title('right pan setpoints')
+    plt.plot(right_pan_setpoint_track.apply_control_points(), color='red')
+    plt.subplot(9, 9, (73, 81))
+    plt.title('right audio waveform')
+    plt.plot(right_wave, color='red')
+
+    plt.show()
 
 def parse_row(row):
     global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
     timestamp = int(row["timestamp"])
 
-    pan_offset, pan_setpoint = int(row["pan_offset"]), int(row["pan_setpoint"])
+    pan_offset, pan_setpoint = int(float(row["pan_offset"])), int(float(row["pan_setpoint"]))
 
-    tilt_offset, tilt_setpoint = int(
-        row["tilt_offset"]), int(row["tilt_setpoint"])
+    tilt_offset, tilt_setpoint = int(float(row["tilt_offset"])), int(float(row["tilt_setpoint"]))
 
     return timestamp, pan_offset, tilt_offset, pan_setpoint, tilt_setpoint
 
@@ -345,16 +366,13 @@ def parse_mdat_file(mdat_file):
         reader = csv.DictReader(mdat)
 
         for row in reader:
-            timestamp, pan_offset, tilt_offset, pan_setpoint, tilt_setpoint = parse_row(
-                row)
+            timestamp, pan_offset, tilt_offset, pan_setpoint, tilt_setpoint = parse_row(row)
 
             raw_timestamps = np.append(raw_timestamps, timestamp)
             raw_pan_offset = np.append(raw_pan_offset, pan_offset)
-            raw_pan_setpoint = np.append(
-                raw_pan_setpoint, pan_setpoint)
+            raw_pan_setpoint = np.append(raw_pan_setpoint, pan_setpoint)
             raw_tilt_offset = np.append(raw_tilt_offset, tilt_offset)
-            raw_tilt_setpoint = np.append(
-                raw_tilt_setpoint, tilt_setpoint)
+            raw_tilt_setpoint = np.append(raw_tilt_setpoint, tilt_setpoint)
 
     return raw_timestamps, raw_pan_offset, raw_tilt_offset, raw_pan_setpoint, raw_tilt_setpoint
 
@@ -564,4 +582,4 @@ if __name__ == '__main__':
     output_filename = args.output if args.output is not None else create_unique_filename(
         f"outputs/SynchronizationEditor/{os.path.splitext(os.path.basename(left_mdat_file))[0]}_{os.path.splitext(os.path.basename(right_mdat_file))[0]}.msync")
 
-    matplot_main()
+    main()
