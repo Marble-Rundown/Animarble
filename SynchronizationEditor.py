@@ -190,6 +190,7 @@ def matplot_main():
     seek_end = TextBox(plt.axes([0.2, 0.05, 0.1, 0.050]), 'end', initial='0')
     seek_end.on_submit(lambda e, i: submit(e, i, False))
 
+    '''
     b_playback_half = Button(plt.axes([0.4, 0.05, 0.1, 0.050]), '0.5x')
     b_playback_half.on_clicked(lambda e: playback(e, 0.5))
     b_playback_1 = Button(plt.axes([0.5, 0.05, 0.1, 0.050]), '1x')
@@ -204,6 +205,11 @@ def matplot_main():
     b_playback_10.on_clicked(lambda e: save_to_msync(left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track,
                                                      left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track))
     # plt.pause(0.1)
+    '''
+    my_speed = input("At what speed would you like to play the animation [any positive float or integer]? Or, you can type 'e' to exit: ")
+    if my_speed == 'e':
+        return
+    playback(float(my_speed))
     plt.show()
 
 def pygame_main():
@@ -242,15 +248,17 @@ def pygame_main():
     left_pan_angle, left_tilt_angle, right_pan_angle, right_tilt_angle = export(
         left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track)
     
+    '''
     for i in range(1, 0, -1):
         pygame.display.set_caption(str(i))
         pygame.display.flip()  
         pygame.time.wait(1000)
-
+    '''
+    
     start_ms = 0
     end_ms = 0
 
-    option = input("Please enter 'p' for entire animation, 's' for a slice, 'c' to add a control point pair, or 'q' to quit (p/s/c/q): ")
+    option = input("Please enter 'p' for entire animation, 's' for a slice, 'c' to add a control point pair, or 'q' to quit and save changes (p/s/c/q): ")
     if option == 'p':
         start_ms = 0
         end_ms = max_timestamp
@@ -262,6 +270,8 @@ def pygame_main():
         print("Saving changes...")
         return
     elif option == 'q':
+        save_to_msync(left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track,
+                                                     left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track)
         return False
     
     start_index = int(round(start_ms / ARDUINO_SAMPLING_INTERVAL))
@@ -453,7 +463,7 @@ def rotate_marbles(left_pan, left_tilt, right_pan, right_tilt):
     glPopMatrix()
 
 
-def playback(event, speed):
+def playback(speed):
     global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
     my_answer = 'y'
     while my_answer == 'y':
