@@ -161,6 +161,7 @@ def main():
 def matplot_main():
     global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
 
+    '''
     plt.subplot(9, 9, (46, 54))
     plt.title('right pan offsets')
     plt.plot(right_pan_offset_track.apply_modifiers(), color='red')
@@ -173,6 +174,9 @@ def matplot_main():
     plt.subplot(9, 9, (73, 81))
     plt.title('right audio waveform')
     plt.plot(signal, color='red')
+    '''
+
+    display_plots()
 
     seek_start = TextBox(
         plt.axes([0.1, 0.05, 0.1, 0.050]), 'start', initial='0')
@@ -196,11 +200,7 @@ def matplot_main():
                                                      left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track))
     # plt.pause(0.1)
     '''
-    my_speed = input("At what speed would you like to play the animation [any positive float or integer]? Or, you can type 'e' to exit: ")
-    if my_speed == 'e':
-        return
-    playback(float(my_speed))
-    plt.show()
+    #plt.show()
 
 
 def pygame_main():
@@ -341,7 +341,12 @@ def display_plots():
     plt.title('right audio waveform')
     plt.plot(right_wave, color='red')
 
+    my_speed = input("At what speed would you like to play the animation [any positive float or integer]? Or, you can type 'e' to exit: ")
+    print("Close the matplot window to continue.")
     plt.show()
+    if my_speed == 'e':
+        return
+    playback(float(my_speed))
 
 def parse_row(row):
     global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
@@ -583,3 +588,4 @@ if __name__ == '__main__':
         f"outputs/SynchronizationEditor/{os.path.splitext(os.path.basename(left_mdat_file))[0]}_{os.path.splitext(os.path.basename(right_mdat_file))[0]}.msync")
 
     main()
+    matplot_main()
