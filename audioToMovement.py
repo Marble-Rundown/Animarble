@@ -10,8 +10,8 @@ import math
 import csv
 
 ap = argparse.ArgumentParser(description="Extract features from a .wav file to a .mvid file")
-ap.add_argument('--input', help="The input .wav file to process")
-ap.add_argument('--output', help="The output .mvid file to write to")
+ap.add_argument('input', help="The input .wav file to process")
+ap.add_argument('output', help="The output .mvid file to write to")
 
 args = ap.parse_args()
 

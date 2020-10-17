@@ -3,6 +3,7 @@ This program enables the synchronization of 2 .mdat files with .wav audio files 
 '''
 
 import pygame
+from pygame import mixer
 import os
 import argparse
 import csv
@@ -41,6 +42,8 @@ left_pan_offset_track = left_tilt_offset_track = left_pan_setpoint_track = left_
 right_pan_offset_track = right_tilt_offset_track = right_pan_setpoint_track = right_tilt_setpoint_track = None
 
 pygame.init()
+mixer.init()
+mixer.music.load("drew_sample.wav")
 display = (800, 600)
 pygame.display.set_mode(display, DOUBLEBUF | OPENGL)
 
@@ -241,15 +244,10 @@ def pygame_main():
     start_index = int(round(START_TIMESTAMP / ARDUINO_SAMPLING_INTERVAL))
     end_index = int(round(END_TIMESTAMP / ARDUINO_SAMPLING_INTERVAL)
                     ) if END_TIMESTAMP != 0 else len(left_pan_angle) - 1
-    
-    for i in range(5, 0, -1):
-        pygame.display.set_caption(str(i))
-        pygame.display.flip()  
-        pygame.time.wait(1000)
-
 
     start_ms = millisec()
     timer = 0
+    mixer.music.play()
     for left_pan, left_tilt, right_pan, right_tilt in zip(left_pan_angle, left_tilt_angle, right_pan_angle, right_tilt_angle):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
