@@ -127,30 +127,37 @@ def smooth_data(writable_data):
     prev_val_pan = 0
     prev_val_tilt = 0
     curr_split = future_index/2
+    finished = False
     for i in range(len(writable_data[0])):
         if i in indexes:
             try:
                 prev_index = future_index
                 future_index = indexes[(indexes.index(future_index)+1)]
-                curr_split = (future_index+prev_index)/2
+                curr_split = int((future_index+prev_index)/2)
             except:
-                pass
+                finished = True
         else:
-            if i > curr_split+prev_index:
-                difference_pan = (writable_data[0][future_index]-prev_val_pan)/(future_index-i)
-                difference_tilt = (writable_data[1][future_index]-prev_val_tilt)/(future_index-i)
-                writable_data[0][i] = prev_val_pan+difference_pan
-                writable_data[1][i] = prev_val_tilt+difference_tilt
-            elif i == curr_split:
-                difference_pan = (writable_data[0][future_index]-prev_val_pan)/(future_index-i)
-                difference_tilt = (writable_data[1][future_index]-prev_val_tilt)/(future_index-i)
+            if finished == True:
+                difference_pan = (-prev_val_pan)/(len(writable_data[0])-i)
+                difference_tilt = (-prev_val_tilt)/(len(writable_data[0])-i)
                 writable_data[0][i] = prev_val_pan+difference_pan
                 writable_data[1][i] = prev_val_tilt+difference_tilt
             else:
-                difference_pan = (-prev_val_pan)/(curr_split-i)
-                difference_tilt = (-prev_val_tilt)/(curr_split-i)
-                writable_data[0][i] = prev_val_pan+difference_pan
-                writable_data[1][i] = prev_val_tilt+difference_tilt
+                if i > curr_split:
+                    difference_pan = (writable_data[0][future_index]-prev_val_pan)/(future_index-i)
+                    difference_tilt = (writable_data[1][future_index]-prev_val_tilt)/(future_index-i)
+                    writable_data[0][i] = prev_val_pan+difference_pan
+                    writable_data[1][i] = prev_val_tilt+difference_tilt
+                elif i == curr_split:
+                    difference_pan = (writable_data[0][future_index]-prev_val_pan)/(future_index-i)
+                    difference_tilt = (writable_data[1][future_index]-prev_val_tilt)/(future_index-i)
+                    writable_data[0][i] = prev_val_pan+difference_pan
+                    writable_data[1][i] = prev_val_tilt+difference_tilt
+                else:
+                    difference_pan = (-prev_val_pan)/(future_index-i)
+                    difference_tilt = (-prev_val_tilt)/(future_index-i)
+                    writable_data[0][i] = prev_val_pan+difference_pan
+                    writable_data[1][i] = prev_val_tilt+difference_tilt
         prev_val_pan = writable_data[0][i]
         prev_val_tilt = writable_data[1][i]
     
@@ -165,22 +172,22 @@ def create_output_file(writable_data, output_filename):
 
         row_dict = {}
         for i in range(len(writable_data[0])):
-            row_dict["timestamp"] = int(i*50)
-            row_dict["pan_offset"] = int(writable_data[0][i])
-            row_dict["tilt_offset"] = int(writable_data[1][i])
-            row_dict["pan_setpoint"] = int(writable_data[2][i]) 
-            row_dict["tilt_setpoint"] = int(writable_data[3][i])
+            row_dict["timestamp"] = str(i*50)
+            row_dict["pan_offset"] = str(writable_data[0][i])
+            row_dict["tilt_offset"] = str(writable_data[1][i])
+            row_dict["pan_setpoint"] = str(writable_data[2][i]) 
+            row_dict["tilt_setpoint"] = str(writable_data[3][i])
             mdat_writer.writerow(row_dict)
 
 
 def generate_movement(input_file, output_file):
     #Getting frames for processing (converts to wav if neccesary)
-    if input_file[-4:] == ".mp3":
+    if input_file[(len(input_file)-4):len(input_file)] == ".mp3":
         convert_mp3_to_wav_frames(input_file)
         frames, frame_info = wav_to_np_array("temp.wav")
         #view_audio("temp.wav")
     else:
-        frames, frame_info = wav_to_np_array(input_file)
+        frames = wavToNpArray(args.input_file)
 
     frames = magnify_peaks(frames, 2)
     frames = normalize(frames)
