@@ -3,7 +3,6 @@ This program enables the synchronization of 2 .mdat files with .wav audio files 
 '''
 
 import pygame
-from pygame import mixer
 import os
 import argparse
 import csv
@@ -42,8 +41,6 @@ left_pan_offset_track = left_tilt_offset_track = left_pan_setpoint_track = left_
 right_pan_offset_track = right_tilt_offset_track = right_pan_setpoint_track = right_tilt_setpoint_track = None
 
 pygame.init()
-mixer.init()
-mixer.music.load("drew_sample.wav")
 display = (800, 600)
 pygame.display.set_mode(display, DOUBLEBUF | OPENGL)
 
@@ -89,6 +86,38 @@ def ln(startms, endms):
     left_pan_offset_track.add_region_modifier(start_index, end_index, 0)
     left_tilt_offset_track.add_region_modifier(start_index, end_index, 0)
 
+def left_move(start_ms, start_angle, end_angle, duration=500):
+    lca(start_ms, start_angle, start_ms+duration, end_angle)
+
+def right_move(start_ms, start_angle, end_angle, duration=500):
+    rca(start_ms, start_angle, start_ms+duration, end_angle)
+
+def left_straight(start_ms, duration=500):
+    left_move(start_ms, 130, 90, duration)
+
+def left_angled(start_ms, duration=500):
+    left_move(start_ms, 90, 130, duration)
+
+def right_straight(start_ms, duration=500):
+    right_move(start_ms, 50, 90, duration)
+
+def right_angled(start_ms, duration=500):
+    right_move(start_ms, 90, 50, duration)
+
+
+def both_move(start_ms, left_start_angle, left_end_angle, right_start_angle, right_end_angle, left_leads=True, duration=500, follow_delay=400):
+    if left_leads:
+        lca(start_ms, left_start_angle, start_ms+duration, left_end_angle)
+        rca(start_ms+follow_delay, right_start_angle, start_ms+duration+follow_delay, right_end_angle)
+    else:
+        rca(start_ms, right_start_angle, start_ms+duration, right_end_angle)
+        lca(start_ms+follow_delay, left_start_angle, start_ms+duration+follow_delay, left_end_angle)
+
+def both_straight(start_ms, left_leads=True, duration=500, follow_delay=400):
+    both_move(start_ms, 130, 90, 50, 90, left_leads, duration, follow_delay)
+
+def both_angled(start_ms, left_leads=True, duration=500, follow_delay=400):
+    both_move(start_ms, 90, 130, 90, 50, left_leads, duration, follow_delay)
 
 def workspace():
     global left_pan_offset_track, left_tilt_offset_track, left_pan_setpoint_track, left_tilt_setpoint_track, right_pan_offset_track, right_tilt_offset_track, right_pan_setpoint_track, right_tilt_setpoint_track
@@ -97,37 +126,31 @@ def workspace():
     ########################################
 
     def both():
-        # What'd you do with extra week?
-        lca(4510 , 90, 4870, 130)
-        rca(4510+400, 90, 4870+400, 50)
-        
-        # If you feel like you're missing out
-        rca(38344, 50, 38911, 90)
-        lca(38344+300, 130, 38911+300, 90)
+        # I gotta say
+        both_angled(2114)
 
-        # So the Sand Marble Rally is back
-        lca(50709, 90, 51276, 130)
-        rca(50709+400, 90, 51276+400, 50)
+        # Question of the Day
+        right_straight(200655)
 
-        # We'll see you in a moment
-        lca(257501, 130, 257901, 90)
+        # (reset)
+        right_angled(211302)
 
-        # (reset back to angle)
-        lca(259474, 90, 260000, 130)
+        # Yup
+        both_straight(344917)
 
-        # And now
-        rca(305969, 50, 306405, 90)
-        lca(305969+400, 130, 306405+400, 90)
+        # No! I was so full of
+        both_angled(366884)
 
-        # So it's time to bring out
-        rca(484579, 90, 485100, 50)
-        lca(484579+400, 90, 485100+400, 130)
+        # Alright Drew
+        both_straight(439392, left_leads=False)
 
-        # So last episode
-        lca(538037, 130, 538187, 90)
-        rca(538037+300, 50, 538187+300, 90)
+        # Whaddya think
+        both_angled(605835, left_leads=False)
 
-    # both()
+        # I'll just take a second
+        both_straight(752755, left_leads=False)
+
+    both()
 
 #############################
 #           Main            #
@@ -245,9 +268,13 @@ def pygame_main():
     end_index = int(round(END_TIMESTAMP / ARDUINO_SAMPLING_INTERVAL)
                     ) if END_TIMESTAMP != 0 else len(left_pan_angle) - 1
 
+    if audio_file is not None:
+        pygame.mixer.init()
+        pygame.mixer.music.load(audio_file)
+        pygame.mixer.music.play()
+
     start_ms = millisec()
     timer = 0
-    mixer.music.play()
     for left_pan, left_tilt, right_pan, right_tilt in zip(left_pan_angle, left_tilt_angle, right_pan_angle, right_tilt_angle):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -448,12 +475,15 @@ if __name__ == '__main__':
     ap.add_argument('right', help="The right marble's .mdat file to process")
     ap.add_argument('-o', '--output',
                     help="The output .msync file to write to")
-    # TODO(JS): Actually use the output file argument
+
+    ap.add_argument('-a', '--audio', help="The audio file to play alongside")
 
     args = ap.parse_args()
 
     left_mdat_file = args.left
     right_mdat_file = args.right
+
+    audio_file = args.audio 
 
     output_filename = args.output if args.output is not None else create_unique_filename(
         f"outputs/SynchronizationEditor/{os.path.splitext(os.path.basename(left_mdat_file))[0]}_{os.path.splitext(os.path.basename(right_mdat_file))[0]}.msync")
